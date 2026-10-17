@@ -40,6 +40,7 @@
 <header>
   <h1>Wharfdrop</h1>
   <div class="me" id="me"></div>
+  <div id="upd" style="margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px"></div>
 </header>
 <main>
   <section class="card">
@@ -102,7 +103,31 @@ async function refresh(){
   try { S = await api('/api/state'); } catch(e){ $('me').textContent='daemon not reachable: '+e.message; return; }
   const me=S.self; $('me').innerHTML = `<b>${esc(me.name)}</b> · id ${me.short} · ${me.addrs.join(', ')}:${me.port}`;
   $('incoming').textContent = S.incoming;
-  renderPairs(); renderPeers(); renderShares(); renderTransfers(); renderSelects();
+  renderUpdate(); renderPairs(); renderPeers(); renderShares(); renderTransfers(); renderSelects();
+}
+
+function renderUpdate(){
+  const u=S.update; if(!u) return;
+  if (document.activeElement && document.activeElement.id==='umode') return; // don't rebuild while the user picks
+  let h=`<span class="sub">${esc(u.current)}</span>`;
+  if (u.installing) h+=`<span>Installing update…</span>`;
+  else if (u.available) h+=`<span style="color:var(--warn)">${esc(u.latest)} available</span><button onclick="installUpdate()">Update now</button>`;
+  h+=`<label class="sub" style="display:flex;gap:6px;align-items:center">Updates <select id="umode" onchange="setMode(this.value)">
+      ${['auto','notify','off'].map(m=>`<option value="${m}" ${u.mode===m?'selected':''}>${{auto:'install automatically',notify:'notify only',off:'off'}[m]}</option>`).join('')}
+    </select></label><button class="ghost" onclick="checkUpdate()" title="Check GitHub for a newer release">Check</button>`;
+  $('upd').innerHTML=h;
+}
+async function setMode(m){ await post('/api/settings',{auto_update:m}); document.activeElement.blur(); refresh(); }
+async function checkUpdate(){
+  const u=await post('/api/update/check');
+  if(u.error) toast('Update check failed: '+u.error);
+  else if(u.dev_build) toast(`Development build. Latest release is ${u.latest}.`);
+  else toast(u.available?`${u.latest} is available.`:`You're up to date (${u.current}).`);
+  refresh();
+}
+async function installUpdate(){
+  try{ await post('/api/update/install'); toast('Updated. Restarting…', 6000); }catch(e){ toast(e.message, 6000); }
+  setTimeout(refresh, 3000);
 }
 
 function renderPairs(){

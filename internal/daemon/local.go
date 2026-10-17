@@ -49,6 +49,9 @@ func (d *Daemon) localMux() http.Handler {
 	api.HandleFunc("POST /api/send", d.lSendUpload)
 	api.HandleFunc("POST /api/send-path", d.lSendPath)
 	api.HandleFunc("GET /api/transfers/{id}", d.lTransfer)
+	api.HandleFunc("GET /api/update", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.updateState()) })
+	api.HandleFunc("POST /api/update/check", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.CheckUpdate(r.Context())) })
+	api.HandleFunc("POST /api/update/install", d.lUpdateInstall)
 	m.Handle("/api/", d.auth(api))
 	return m
 }
@@ -107,6 +110,7 @@ type State struct {
 	PendingIn  []PairRequest   `json:"pending_in"`
 	PendingOut []PairRequest   `json:"pending_out"`
 	Transfers  []Transfer      `json:"transfers"`
+	Update     UpdateState     `json:"update"`
 }
 
 func (d *Daemon) state() State {
@@ -156,6 +160,7 @@ func (d *Daemon) state() State {
 	}
 	d.mu.Unlock()
 	s.Transfers = d.transfers.List()
+	s.Update = d.updateState()
 	return s
 }
 
@@ -275,8 +280,17 @@ func (d *Daemon) lShareDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Daemon) lSettings(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Name, Incoming string }
+	var in struct {
+		Name, Incoming string
+		AutoUpdate     string `json:"auto_update"`
+	}
 	decode(r, &in)
+	switch in.AutoUpdate {
+	case "", "auto", "notify", "off":
+	default:
+		fail(w, errors.New("auto_update must be auto, notify or off"), 400)
+		return
+	}
 	if in.Incoming != "" {
 		if err := os.MkdirAll(in.Incoming, 0o755); err != nil {
 			fail(w, err, 400)
@@ -289,6 +303,9 @@ func (d *Daemon) lSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.Incoming != "" {
 			c.IncomingDir = in.Incoming
+		}
+		if in.AutoUpdate != "" {
+			c.AutoUpdate = in.AutoUpdate
 		}
 	})
 	writeJSON(w, map[string]bool{"ok": true})
@@ -452,4 +469,14 @@ func (d *Daemon) lTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, t)
+}
+
+func (d *Daemon) lUpdateInstall(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if err := d.InstallUpdate(ctx); err != nil {
+		fail(w, err, 409)
+		return
+	}
+	writeJSON(w, d.updateState())
 }

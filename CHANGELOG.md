@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-18
+
+### Added
+- Automatic updates from GitHub Releases, verified with an Ed25519 signature compiled into
+  the app and a SHA-256 checksum. Updates install while idle and Wharfdrop restarts itself.
+- `auto-update` setting (`auto`, `notify`, `off`) in the web UI and `wharfdrop set`.
+- `wharfdrop update [--check]` and `wharfdrop version` commands.
+- Update status in `wharfdrop status` and in the web UI header.
+
+### Changed
+- Release checksums are now signed (`SHA256SUMS.sig`).
+- Config is only rewritten when a peer's address changes, not on every request.
+- Pending pairing requests are capped to stop a noisy device flooding the screen.
+
 ## [0.1.0] - 2026-10-18
 
 ### Added
@@ -15,4 +29,5 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.2.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.1.0

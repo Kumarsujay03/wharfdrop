@@ -29,6 +29,7 @@ type Config struct {
 	PeerPort    int              `json:"peer_port"`
 	UIPort      int              `json:"ui_port"`
 	IncomingDir string           `json:"incoming_dir"`
+	AutoUpdate  string           `json:"auto_update"` // auto | notify | off
 	Peers       map[string]*Peer `json:"peers"`
 	Shares      []*Share         `json:"shares"`
 }
@@ -59,6 +60,9 @@ func Load(dir string) (*Config, error) {
 	}
 	if c.UIPort == 0 {
 		c.UIPort = 48081
+	}
+	if c.AutoUpdate == "" {
+		c.AutoUpdate = "auto"
 	}
 	if c.IncomingDir == "" {
 		home, _ := os.UserHomeDir()
