@@ -1,0 +1,16 @@
+# build output
+/bin/
+/dist/
+
+# partial transfers and local test data
+*.part
+*.test
+*.out
+coverage.*
+
+# editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
