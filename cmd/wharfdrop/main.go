@@ -29,6 +29,9 @@ const usage = `Wharfdrop %s — secure file sharing between your own devices on 
 
 Wharfdrop only runs when you start it. When stopped it uses no CPU, memory or network.
 
+On Windows, double-click wharfdrop.exe (or run it with no command) to start it and open
+the web UI.
+
 Usage:
   wharfdrop start                    start in the background
   wharfdrop stop [--force]           stop completely (--force: even during a transfer)
@@ -53,6 +56,12 @@ Usage:
 `
 
 func main() {
+	doubleClicked = launchedByDoubleClick()
+	if len(os.Args) < 2 && (doubleClicked || runtime.GOOS == "windows") {
+		// Started without a command (double-click, Start menu, or plain
+		// `wharfdrop` on Windows): start in the background and open the UI.
+		os.Args = append(os.Args, "ui")
+	}
 	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
 		fmt.Printf(usage, daemon.Version)
 		return
@@ -76,8 +85,14 @@ func main() {
 	case "ui":
 		c := start(dir)
 		url := c.uiURL()
-		fmt.Println(url)
-		openBrowser(url)
+		fmt.Println("Wharfdrop is running. Opening", url)
+		fmt.Println("Stop it from the web page or with: wharfdrop stop")
+		if os.Getenv("WHARFDROP_NO_BROWSER") == "" {
+			openBrowser(url)
+		}
+		if doubleClicked {
+			time.Sleep(3 * time.Second) // let the user read it before the window closes
+		}
 	case "status":
 		cli(dir).status()
 	case "pair":
@@ -611,8 +626,16 @@ func need(args []string, n int, usage string) {
 	}
 }
 
+// doubleClicked is true when Wharfdrop owns its console window (started from
+// Explorer). The window would close at once, so errors wait for Enter.
+var doubleClicked bool
+
 func die(msg string) {
 	fmt.Fprintln(os.Stderr, msg)
+	if doubleClicked {
+		fmt.Fprint(os.Stderr, "\nPress Enter to close this window.")
+		fmt.Scanln()
+	}
 	os.Exit(1)
 }
 

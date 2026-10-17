@@ -42,3 +42,50 @@ jobs:
           go-version: stable
           cache: false
       - run: ./build.sh
+
+  windows-smoke:
+    name: Windows smoke test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: false
+      - name: Build with build.ps1 (no make)
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File build.ps1 -NoTest
+      - name: Start, status, stop, and no-argument launch
+        shell: pwsh
+        env:
+          WHARFDROP_DIR: ${{ runner.temp }}\wd
+          WHARFDROP_NO_BROWSER: "1"
+        run: |
+          $exe = ".\bin\wharfdrop.exe"
+          & $exe start;  if ($LASTEXITCODE) { throw "start failed" }
+          & $exe status; if ($LASTEXITCODE) { throw "status failed" }
+          & $exe stop;   if ($LASTEXITCODE) { throw "stop failed" }
+          Start-Sleep 1
+          if (Get-Process wharfdrop -ErrorAction SilentlyContinue) { throw "still running after stop" }
+          # running with no command (like a double-click) must start it
+          & $exe;        if ($LASTEXITCODE) { throw "no-arg launch failed" }
+          & $exe status | Select-String "This device" | Out-Null
+          if (-not $?) { throw "not running after no-arg launch" }
+          & $exe stop
+          Start-Sleep 1
+          if (Get-Process wharfdrop -ErrorAction SilentlyContinue) { throw "still running after stop" }
+          Write-Host "smoke test passed"
+      - name: Installer (install, run, uninstall)
+        shell: powershell
+        env:
+          WHARFDROP_NO_LAUNCH: "1"
+          WHARFDROP_DIR: ${{ runner.temp }}\wd2
+        run: |
+          .\install.ps1
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Wharfdrop\wharfdrop.exe'
+          & $exe version; if ($LASTEXITCODE) { throw "installed binary does not run" }
+          if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Wharfdrop.lnk'))) { throw "no Start menu shortcut" }
+          $env:WHARFDROP_UNINSTALL = "1"
+          .\install.ps1
+          if (Test-Path $exe) { throw "uninstall left the binary" }
+          Write-Host "installer test passed"

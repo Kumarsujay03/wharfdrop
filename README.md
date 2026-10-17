@@ -19,38 +19,71 @@ Linux, Windows and macOS. One static binary, no accounts, no cloud, no internet.
 
 ## Install
 
-Download the binary for your system from the
-[latest release](https://github.com/Kumarsujay03/wharfdrop/releases/latest):
+### Windows
 
-| System | File |
-|---|---|
-| Windows 10/11 (most PCs) | `wharfdrop-<version>-windows-amd64.exe` |
-| Windows on ARM | `wharfdrop-<version>-windows-arm64.exe` |
-| Linux (Ubuntu etc.) | `wharfdrop-<version>-linux-amd64` |
-| Linux on ARM (Raspberry Pi 4/5) | `wharfdrop-<version>-linux-arm64` |
-| macOS Apple silicon / Intel | `wharfdrop-<version>-darwin-arm64` / `-darwin-amd64` |
+Open **PowerShell** (no admin needed) and run:
 
-Linux and macOS (a folder you own, so Wharfdrop can update itself):
-
-```bash
-mkdir -p ~/.local/bin
-mv wharfdrop-*-linux-amd64 ~/.local/bin/wharfdrop && chmod +x ~/.local/bin/wharfdrop
+```powershell
+irm https://raw.githubusercontent.com/Kumarsujay03/wharfdrop/main/install.ps1 | iex
 ```
 
-Windows: rename the file to `wharfdrop.exe` and keep it in a folder you own, such as
-`%LOCALAPPDATA%\Programs\Wharfdrop`, then add that folder to your `PATH`.
-`SHA256SUMS` in the release lets you verify the download.
+This downloads the latest release, checks its checksum, installs it to
+`%LOCALAPPDATA%\Programs\Wharfdrop`, adds it to your `PATH`, adds **Wharfdrop** to the
+Start menu, and opens it. It does not start Wharfdrop at login.
+
+When Windows Firewall asks, allow Wharfdrop on **Private networks**. Otherwise other
+devices cannot find this PC.
+
+Prefer doing it by hand? Download `wharfdrop-<version>-windows-amd64.exe` from the
+[latest release](https://github.com/Kumarsujay03/wharfdrop/releases/latest), rename it to
+`wharfdrop.exe`, put it in a folder you own, and **double-click it**. It starts in the
+background and opens the web UI in your browser. If SmartScreen warns about an unrecognised
+app, click **More info** and then **Run anyway**.
+
+To uninstall:
+
+```powershell
+$env:WHARFDROP_UNINSTALL=1; irm https://raw.githubusercontent.com/Kumarsujay03/wharfdrop/main/install.ps1 | iex
+```
+
+### Linux and macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kumarsujay03/wharfdrop/main/install.sh | sh
+```
+
+This installs the latest release to `~/.local/bin/wharfdrop` after checking its checksum.
+On Ubuntu with ufw, open the ports once (see [Firewall](#firewall)).
+
+All release files, including Linux/macOS/Windows on ARM, are on the
+[releases page](https://github.com/Kumarsujay03/wharfdrop/releases/latest) with a
+`SHA256SUMS` file.
 
 ### Build from source
 
-Go 1.22 or newer, no third-party dependencies:
+You need [Go 1.22 or newer](https://go.dev/dl/) and Git. There are no other dependencies.
+
+Windows (PowerShell, no `make` needed):
+
+```powershell
+git clone https://github.com/Kumarsujay03/wharfdrop.git
+cd wharfdrop
+powershell -ExecutionPolicy Bypass -File build.ps1     # runs the tests, builds bin\wharfdrop.exe
+.\bin\wharfdrop.exe ui
+```
+
+Or with plain Go on any system: `go build -o wharfdrop.exe ./cmd/wharfdrop`.
+
+Linux and macOS:
 
 ```bash
 git clone https://github.com/Kumarsujay03/wharfdrop.git
 cd wharfdrop
 make test build        # bin/wharfdrop for this machine
-./build.sh             # all platforms into dist/
+./build.sh             # release binaries for every platform into dist/
 ```
+
+Builds from source are development builds and do not update themselves.
 
 ## Use
 

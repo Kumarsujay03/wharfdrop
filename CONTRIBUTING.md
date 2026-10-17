@@ -21,6 +21,9 @@ make build     # bin/wharfdrop for your platform
 ./build.sh     # release binaries for every platform into dist/
 ```
 
+On Windows, where `make` is not installed, use `powershell -ExecutionPolicy Bypass -File build.ps1`,
+or run `go test ./...` and `go build -o bin\wharfdrop.exe ./cmd/wharfdrop` directly.
+
 To run two nodes on one machine, give each its own config directory and ports:
 
 ```bash

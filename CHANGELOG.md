@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-10-18
+
+### Fixed
+- Double-clicking `wharfdrop.exe` on Windows only flashed a console window. It now starts
+  Wharfdrop in the background and opens the web UI. Errors stay on screen until you press Enter.
+
+### Added
+- One-line installers: `install.ps1` for Windows (PATH, Start menu shortcut, uninstall) and
+  `install.sh` for Linux and macOS. Both verify the release checksum.
+- `build.ps1` to build on Windows without `make`.
+- CI smoke tests that run the Windows binary and the Windows installer.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added
@@ -32,5 +44,6 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.2.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.1.0
