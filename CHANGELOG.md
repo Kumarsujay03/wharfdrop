@@ -12,6 +12,9 @@ project uses [Semantic Versioning](https://semver.org/).
 - `auto-update` setting (`auto`, `notify`, `off`) in the web UI and `wharfdrop set`.
 - `wharfdrop update [--check]` and `wharfdrop version` commands.
 - Update status in `wharfdrop status` and in the web UI header.
+- `wharfdrop start` runs Wharfdrop in the background and `wharfdrop stop [--force]` stops it
+  completely. `wharfdrop ui` starts it if needed. A **Stop** button is in the web UI header.
+  Wharfdrop never starts on its own at login.
 
 ### Changed
 - Release checksums are now signed (`SHA256SUMS.sig`).
