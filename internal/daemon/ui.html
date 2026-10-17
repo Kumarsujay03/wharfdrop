@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wharfdrop</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e6e8ee;--mut:#8b93a7;--acc:#4f8cff;--ok:#3ecf8e;--bad:#ff5c5c;--warn:#ffb347}
+  @media (prefers-color-scheme: light){:root{--bg:#f5f6f8;--card:#fff;--line:#e3e6ec;--fg:#15181f;--mut:#667085}}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line)}
+  header h1{font-size:18px;margin:0}header .me{color:var(--mut);font-size:13px}
+  main{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 20px;max-width:1200px;margin:0 auto}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0 0 10px}
+  .row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:0}.grow{flex:1;min-width:0}.name{font-weight:600}.sub{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--mut)}.dot.on{background:var(--ok)}
+  button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+  button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}button.bad{background:var(--bad)}button.ok{background:var(--ok);color:#06281a}
+  button:disabled{opacity:.5;cursor:default}
+  input,select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}
+  .pair{border:1px solid var(--warn);border-radius:10px;padding:12px;margin-bottom:10px;background:rgba(255,179,71,.06)}
+  .code{font:700 30px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;margin:8px 0}
+  .drop{border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;color:var(--mut);transition:.15s}
+  .drop.over{border-color:var(--acc);color:var(--fg);background:rgba(79,140,255,.08)}
+  .bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:var(--acc)}
+  .bar i.done{background:var(--ok)}.bar i.err{background:var(--bad)}
+  .crumbs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;color:var(--mut)}.crumbs a{color:var(--acc);cursor:pointer}
+  .file{display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);cursor:default}.file.dir{cursor:pointer}
+  .file .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file .s{color:var(--mut);font-size:12px;width:80px;text-align:right}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);padding:10px 14px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.3);display:none;max-width:90vw}
+  .mono{font-family:ui-monospace,Menlo,monospace}.small{font-size:12px}.hint{color:var(--mut);font-size:12px;margin-top:6px}
+  .empty{color:var(--mut);padding:10px 0}
+  details summary{cursor:pointer;color:var(--mut);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Wharfdrop</h1>
+  <div class="me" id="me"></div>
+</header>
+<main>
+  <section class="card">
+    <h2>Devices on this network</h2>
+    <div id="pairs"></div>
+    <div id="peers"></div>
+    <details style="margin-top:8px"><summary>Pair by IP address (if a device is not listed)</summary>
+      <div class="row"><input id="addr" class="grow" placeholder="192.168.1.20:48080"><button onclick="pairAddr()">Pair</button></div>
+      <div class="hint">Devices on Wi-Fi bands of the same router normally find each other automatically. If not, your router has "AP/client isolation" turned on, or a firewall blocks UDP 47070.</div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Send files</h2>
+    <div class="row" style="border:0;padding-top:0"><span>To</span><select id="target" class="grow"></select></div>
+    <div class="drop" id="drop">
+      Drag files or folders here, or <a href="#" onclick="document.getElementById('fi').click();return false">choose files</a> / <a href="#" onclick="document.getElementById('di').click();return false">choose a folder</a>
+      <input type="file" id="fi" multiple hidden><input type="file" id="di" webkitdirectory hidden>
+    </div>
+    <div class="hint">Files arrive in the other device's incoming folder. Yours: <span class="mono" id="incoming"></span></div>
+  </section>
+
+  <section class="card">
+    <h2>Browse a paired device</h2>
+    <div class="row" style="border:0;padding-top:0"><select id="bpeer" class="grow" onchange="openPeer()"></select></div>
+    <div id="browser"><div class="empty">Pick a device to see the folders it shared with you.</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Folders I share</h2>
+    <div id="shares"></div>
+    <div class="row"><input id="sname" placeholder="name (e.g. videos)" style="width:150px"><input id="spath" class="grow" placeholder="D:\Videos or /home/me/Videos"><select id="speers"><option value="*">all paired</option></select><button onclick="addShare()">Share</button></div>
+    <div class="hint">Shares are read-only: paired devices can list and download, never modify.</div>
+  </section>
+
+  <section class="card" style="grid-column:1/-1">
+    <h2>Transfers</h2>
+    <div id="transfers"><div class="empty">Nothing yet.</div></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+const T = new URLSearchParams(location.search).get('t') || '';
+const H = {'X-Token': T};
+const $ = id => document.getElementById(id);
+let S = null, browse = {peer:null, share:null, path:''};
+
+async function api(path, opts={}) {
+  const r = await fetch(path, {...opts, headers: {...H, ...(opts.headers||{})}});
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const post = (p, body) => api(p, {method:'POST', body: JSON.stringify(body||{}), headers:{'Content-Type':'application/json'}});
+function toast(msg, ms=3500){ const t=$('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', ms); }
+const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmt(n){ if(n==null||n<0) return '?'; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return n.toFixed(i?1:0)+' '+u[i]; }
+
+async function refresh(){
+  try { S = await api('/api/state'); } catch(e){ $('me').textContent='daemon not reachable: '+e.message; return; }
+  const me=S.self; $('me').innerHTML = `<b>${esc(me.name)}</b> · id ${me.short} · ${me.addrs.join(', ')}:${me.port}`;
+  $('incoming').textContent = S.incoming;
+  renderPairs(); renderPeers(); renderShares(); renderTransfers(); renderSelects();
+}
+
+function renderPairs(){
+  let h='';
+  for (const p of S.pending_in.filter(p=>p.status==='pending')) h += `<div class="pair"><div><b>${esc(p.peer_name)}</b> wants to pair with this device.</div>
+    <div class="code">${p.code}</div><div class="small">Allow only if the other screen shows the same code.</div>
+    <div style="margin-top:8px;display:flex;gap:8px"><button class="ok" onclick="respond('${p.id}',true)">Allow</button><button class="bad" onclick="respond('${p.id}',false)">Deny</button></div></div>`;
+  for (const p of S.pending_out.filter(p=>p.status==='pending')) h += `<div class="pair"><div>Pairing with <b>${esc(p.peer_name)}</b>…</div>
+    <div class="code">${p.code}</div><div class="small">${p.local_confirmed ? 'Waiting for the other device to tap Allow.' : 'Does the other device show the same code?'}</div>
+    <div style="margin-top:8px;display:flex;gap:8px"><button class="ok" ${p.local_confirmed?'disabled':''} onclick="post('/api/pair/confirm',{id:'${p.id}'}).then(refresh)">Yes, same code</button><button class="ghost" onclick="post('/api/pair/cancel',{id:'${p.id}'}).then(refresh)">Cancel</button></div></div>`;
+  $('pairs').innerHTML=h;
+}
+function renderPeers(){
+  if(!S.peers.length){ $('peers').innerHTML='<div class="empty">No other devices seen yet. Start Wharfdrop on the other machine.</div>'; return; }
+  $('peers').innerHTML = S.peers.map(p=>`<div class="row"><span class="dot ${p.online?'on':''}" title="${p.online?'online':'offline'}"></span>
+    <div class="grow"><div class="name">${esc(p.name)} ${p.trusted?'<span class="small" style="color:var(--ok)">paired</span>':''}</div><div class="sub">${esc(p.addr||'')} · ${p.fp.slice(0,12)}</div></div>
+    ${p.trusted ? `<button class="ghost" onclick="browseTo('${p.fp}')">Browse</button><button class="ghost" onclick="unpair('${p.fp}')">Unpair</button>` : `<button onclick="pair('${p.fp}')">Pair</button>`}</div>`).join('');
+}
+function renderSelects(){
+  const trusted = S.peers.filter(p=>p.trusted);
+  for (const id of ['target','bpeer']) {
+    const sel=$(id), cur=sel.value;
+    sel.innerHTML = (trusted.length?'' : '<option value="">(pair a device first)</option>') + trusted.map(p=>`<option value="${p.fp}">${esc(p.name)}${p.online?'':' (offline)'}</option>`).join('');
+    if (cur && trusted.some(p=>p.fp===cur)) sel.value=cur;
+  }
+  const sp=$('speers'); const cur=sp.value;
+  sp.innerHTML='<option value="*">all paired</option>'+trusted.map(p=>`<option value="${p.fp}">${esc(p.name)} only</option>`).join('');
+  sp.value=cur||'*';
+}
+function renderShares(){
+  if(!S.shares.length){ $('shares').innerHTML='<div class="empty">Nothing shared yet. Add a folder below to let paired devices browse it.</div>'; return; }
+  const nm = fp => fp==='*' ? 'all paired' : (S.peers.find(p=>p.fp===fp)||{}).name || fp.slice(0,8);
+  $('shares').innerHTML = S.shares.map(s=>`<div class="row"><div class="grow"><div class="name">${esc(s.name)}</div><div class="sub mono">${esc(s.path)} → ${s.peers.map(nm).map(esc).join(', ')}</div></div><button class="ghost" onclick="delShare('${esc(s.name)}')">Remove</button></div>`).join('');
+}
+function renderTransfers(){
+  const ts=S.transfers.slice(0,30);
+  if(!ts.length){ $('transfers').innerHTML='<div class="empty">Nothing yet.</div>'; return; }
+  $('transfers').innerHTML = ts.map(t=>{
+    const pct = t.size>0 ? Math.min(100, t.done*100/t.size) : (t.finished&&!t.error?100:0);
+    const dur = ((t.finished? new Date(t.finished): new Date()) - new Date(t.started))/1000;
+    const rate = dur>0 ? fmt(t.done/dur)+'/s' : '';
+    const st = t.error ? `<span style="color:var(--bad)">${esc(t.error)}</span>` : (t.finished ? 'done' : 'in progress');
+    const icon = {send:'↑',receive:'↓',download:'↓'}[t.kind]||'';
+    return `<div style="padding:6px 0"><div style="display:flex;gap:8px"><span>${icon}</span><span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.name)} <span class="sub" style="display:inline">${t.kind} · ${esc(t.peer)}${t.dest&&t.dest!=='(browser)'?' · '+esc(t.dest):''}</span></span><span class="small">${fmt(t.done)}${t.size>0?' / '+fmt(t.size):''} · ${rate} · ${st}</span></div><div class="bar"><i class="${t.error?'err':(t.finished?'done':'')}" style="width:${pct}%"></i></div></div>`;
+  }).join('');
+}
+
+async function pair(fp){ try{ await post('/api/pair',{fp}); refresh(); }catch(e){ toast('Pairing failed: '+e.message); } }
+async function pairAddr(){ try{ await post('/api/pair',{addr:$('addr').value.trim()}); refresh(); }catch(e){ toast('Pairing failed: '+e.message); } }
+async function respond(id, allow){ await post('/api/pair/respond',{id, allow}); refresh(); }
+async function unpair(fp){ if(confirm('Forget this device? It will need to pair again.')){ await post('/api/unpair',{fp}); refresh(); } }
+async function addShare(){ try{ await post('/api/shares',{name:$('sname').value.trim(), path:$('spath').value.trim(), peers:[$('speers').value]}); $('sname').value=''; $('spath').value=''; refresh(); }catch(e){ toast(e.message); } }
+async function delShare(name){ await api('/api/shares?name='+encodeURIComponent(name),{method:'DELETE'}); refresh(); }
+
+// ---- sending ----
+const drop=$('drop');
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop', async e=>{ const files = await collect(e.dataTransfer); send(files); });
+$('fi').onchange = e=>send([...e.target.files].map(f=>({file:f,rel:f.name})));
+$('di').onchange = e=>send([...e.target.files].map(f=>({file:f,rel:f.webkitRelativePath||f.name})));
+
+// Walk dropped directories via the webkit entries API so folders keep structure.
+async function collect(dt){
+  const out=[]; const items=[...(dt.items||[])];
+  const entries = items.map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
+  if(!entries.length){ for(const f of dt.files) out.push({file:f, rel:f.name}); return out; }
+  const walk = (entry, prefix) => new Promise(res=>{
+    if(entry.isFile) entry.file(f=>{ out.push({file:f, rel:prefix+entry.name}); res(); });
+    else { const r=entry.createReader(); const all=[]; const read=()=>r.readEntries(async es=>{ if(!es.length){ for(const e of all) await walk(e, prefix+entry.name+'/'); res(); } else { all.push(...es); read(); } }); read(); }
+  });
+  for(const e of entries) await walk(e,'');
+  return out;
+}
+function send(files){
+  const peer=$('target').value; if(!peer){ toast('Pair a device first.'); return; }
+  if(!files.length) return;
+  const fd=new FormData(); for(const {file,rel} of files) fd.append('file', file, rel);
+  const x=new XMLHttpRequest(); x.open('POST','/api/send?peer='+encodeURIComponent(peer)); x.setRequestHeader('X-Token',T);
+  x.onload=()=>{ if(x.status===200) toast(`Sent ${files.length} file(s).`); else toast('Send failed: '+(JSON.parse(x.responseText||'{}').error||x.statusText), 6000); refresh(); };
+  x.onerror=()=>toast('Send failed.');
+  x.send(fd); toast(`Sending ${files.length} file(s)…`);
+}
+
+// ---- browsing ----
+function browseTo(fp){ $('bpeer').value=fp; openPeer(); $('bpeer').scrollIntoView({behavior:'smooth'}); }
+async function openPeer(){
+  const fp=$('bpeer').value; browse={peer:fp, share:null, path:''};
+  if(!fp){ $('browser').innerHTML='<div class="empty">Pick a device.</div>'; return; }
+  try{
+    const shares=await api('/api/peer/shares?peer='+encodeURIComponent(fp));
+    if(!shares.length){ $('browser').innerHTML='<div class="empty">This device has not shared any folder with you.</div>'; return; }
+    $('browser').innerHTML = shares.map(s=>`<div class="file dir" onclick="openShare('${esc(s.name)}')">📁 <span class="n">${esc(s.name)}</span></div>`).join('');
+  }catch(e){ $('browser').innerHTML=`<div class="empty" style="color:var(--bad)">${esc(e.message)}</div>`; }
+}
+async function openShare(name){ browse.share=name; browse.path=''; ls(); }
+async function ls(){
+  const q = p => '/api/peer/'+p+'?peer='+encodeURIComponent(browse.peer)+'&share='+encodeURIComponent(browse.share)+'&path='+encodeURIComponent(browse.path);
+  let ents; try{ ents=await api(q('ls')); }catch(e){ toast(e.message); return; }
+  const parts=browse.path?browse.path.split('/'):[];
+  let crumbs=`<a onclick="openPeer()">${esc($('bpeer').selectedOptions[0].text)}</a> / <a onclick="openShare('${esc(browse.share)}')">${esc(browse.share)}</a>`;
+  parts.forEach((p,i)=>{ crumbs+=` / <a onclick="goto('${esc(parts.slice(0,i+1).join('/'))}')">${esc(p)}</a>`; });
+  const dl = p => q('get')+'&t='+T+'&path='+encodeURIComponent(p);
+  ents.sort((a,b)=>(b.dir-a.dir)||a.name.localeCompare(b.name));
+  $('browser').innerHTML = `<div class="crumbs">${crumbs} <span style="margin-left:auto"><a href="${dl(browse.path)}">⬇ download folder as zip</a></span></div>` +
+    (ents.length? ents.map(e=>{ const p=(browse.path?browse.path+'/':'')+e.name;
+      return e.dir ? `<div class="file dir" onclick="goto('${esc(p)}')">📁 <span class="n">${esc(e.name)}</span><span class="s"></span></div>`
+                   : `<div class="file">📄 <span class="n">${esc(e.name)}</span><span class="s">${fmt(e.size)}</span><a href="${dl(p)}" title="download">⬇</a></div>`; }).join('')
+     : '<div class="empty">Empty folder.</div>');
+}
+function goto(p){ browse.path=p; ls(); }
+
+refresh(); setInterval(refresh, 1500);
+</script>
+</body>
+</html>
