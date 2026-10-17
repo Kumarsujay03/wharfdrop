@@ -27,9 +27,13 @@ import (
 
 const usage = `Wharfdrop %s — secure file sharing between your own devices on the same Wi-Fi/LAN.
 
+Wharfdrop only runs when you start it. When stopped it uses no CPU, memory or network.
+
 Usage:
-  wharfdrop serve                    run the node (peer API + web UI); keep this running
-  wharfdrop ui                       open the web UI in your browser
+  wharfdrop start                    start in the background
+  wharfdrop stop [--force]           stop completely (--force: even during a transfer)
+  wharfdrop ui                       start if needed and open the web UI in your browser
+  wharfdrop serve                    run in this terminal instead (Ctrl+C stops it)
   wharfdrop status                   show this device, paired devices and devices seen on the LAN
   wharfdrop pair <device|ip:port>    start pairing; a 6-digit code appears on both screens
   wharfdrop allow                    approve a pairing request another device sent to this one
@@ -63,8 +67,14 @@ func main() {
 		fmt.Println("wharfdrop", daemon.Version)
 	case "update":
 		selfUpdate(dir, len(args) > 0 && args[0] == "--check")
+	case "start":
+		c := start(dir)
+		fmt.Println("Wharfdrop is running. Web UI:", c.uiURL())
+		fmt.Println("Stop it with: wharfdrop stop")
+	case "stop":
+		stop(dir, len(args) > 0 && args[0] == "--force")
 	case "ui":
-		c := cli(dir)
+		c := start(dir)
 		url := c.uiURL()
 		fmt.Println(url)
 		openBrowser(url)
@@ -185,9 +195,67 @@ type client struct {
 func cli(dir string) *client {
 	c, ok := tryCLI(dir)
 	if !ok {
-		die("Wharfdrop is not running. Start it with: wharfdrop serve")
+		die("Wharfdrop is not running. Start it with: wharfdrop start")
 	}
 	return c
+}
+
+// start launches `wharfdrop serve` in the background (unless it already
+// runs) and waits until it answers.
+func start(dir string) *client {
+	if c, ok := tryCLI(dir); ok {
+		return c
+	}
+	exe, err := update.Executable()
+	check(err)
+	logPath := filepath.Join(dir, "wharfdrop.log")
+	if fi, err := os.Stat(logPath); err == nil && fi.Size() > 5<<20 {
+		os.Rename(logPath, logPath+".1")
+	}
+	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	check(err)
+	defer logf.Close()
+	cmd := exec.Command(exe, "serve")
+	cmd.Stdout, cmd.Stderr = logf, logf
+	cmd.Env = append(os.Environ(), "WHARFDROP_DIR="+dir)
+	detach(cmd)
+	check(cmd.Start())
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	for i := 0; i < 100; i++ {
+		select {
+		case <-exited:
+			die("Wharfdrop failed to start; see " + logPath)
+		case <-time.After(100 * time.Millisecond):
+		}
+		if c, ok := tryCLI(dir); ok {
+			cmd.Process.Release()
+			return c
+		}
+	}
+	die("Wharfdrop did not come up in time; see " + logPath)
+	return nil
+}
+
+func stop(dir string, force bool) {
+	c, ok := tryCLI(dir)
+	if !ok {
+		fmt.Println("Wharfdrop is not running.")
+		return
+	}
+	path := "/api/shutdown"
+	if force {
+		path += "?force=1"
+	}
+	c.post(path, nil, nil)
+	for i := 0; i < 50; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if _, ok := tryCLI(dir); !ok {
+			fmt.Println("Wharfdrop stopped.")
+			return
+		}
+	}
+	die("Wharfdrop did not stop in time")
 }
 
 // tryCLI connects to a running daemon, if there is one.

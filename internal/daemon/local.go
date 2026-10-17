@@ -52,6 +52,7 @@ func (d *Daemon) localMux() http.Handler {
 	api.HandleFunc("GET /api/update", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.updateState()) })
 	api.HandleFunc("POST /api/update/check", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.CheckUpdate(r.Context())) })
 	api.HandleFunc("POST /api/update/install", d.lUpdateInstall)
+	api.HandleFunc("POST /api/shutdown", d.lShutdown)
 	m.Handle("/api/", d.auth(api))
 	return m
 }
@@ -479,4 +480,20 @@ func (d *Daemon) lUpdateInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, d.updateState())
+}
+
+// lShutdown stops the whole node: peer API, discovery, update checks and UI.
+func (d *Daemon) lShutdown(w http.ResponseWriter, r *http.Request) {
+	if d.busy() && r.URL.Query().Get("force") != "1" {
+		fail(w, errors.New("a transfer is in progress; stop anyway with: wharfdrop stop --force"), 409)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+	go func() {
+		time.Sleep(200 * time.Millisecond) // let the reply go out
+		select {
+		case d.shutdown <- struct{}{}:
+		default:
+		}
+	}()
 }

@@ -54,12 +54,21 @@ make test build        # bin/wharfdrop for this machine
 
 ## Use
 
-On every device:
+Wharfdrop runs **only when you start it**. It never starts at login, and once stopped it
+uses no CPU, memory or network.
+
+On each device, when you want to share:
 
 ```bash
-wharfdrop serve        # keep running (a terminal, a systemd user unit, or a Windows shortcut)
-wharfdrop ui           # opens http://127.0.0.1:48081/?t=<token> in your browser
+wharfdrop ui           # starts Wharfdrop in the background and opens the web UI
+wharfdrop start        # ...or just start it in the background
+wharfdrop stop         # stop everything when you are done
 ```
+
+You can also click **Stop** in the web UI header. `wharfdrop stop` refuses while a transfer is
+running; add `--force` to stop anyway. To run in a terminal window instead, use
+`wharfdrop serve` and press Ctrl+C to stop. The background node logs to `wharfdrop.log` in
+the config folder.
 
 Pair (either from the web UI or the terminal):
 
@@ -93,7 +102,8 @@ to use another directory (handy for running two nodes on one machine while testi
 Wharfdrop keeps itself up to date from this repository's
 [releases](https://github.com/Kumarsujay03/wharfdrop/releases).
 
-* The running node checks one minute after start and then every 6 hours.
+* While Wharfdrop is running it checks one minute after you start it, then every 6 hours.
+  Nothing checks while it is stopped.
 * By default a new version is **installed automatically**, then Wharfdrop restarts itself.
   It waits if a transfer is in progress.
 * Change this in the web UI header, or from the terminal:
@@ -133,7 +143,7 @@ sudo ufw allow 47070/udp && sudo ufw allow 48080/tcp
 ```
 
 Windows: accept the Defender Firewall prompt on first run for *private* networks, or
-run `wharfdrop serve` once from an elevated prompt and allow it.
+run `wharfdrop start` once and allow it when Windows asks.
 
 If devices do not list each other, discovery is being filtered (ufw, router "AP/client
 isolation", some mesh systems). Pairing by IP address still works, and once paired the

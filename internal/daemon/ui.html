@@ -100,6 +100,7 @@ const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>
 function fmt(n){ if(n==null||n<0) return '?'; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return n.toFixed(i?1:0)+' '+u[i]; }
 
 async function refresh(){
+  if (stopped) return;
   try { S = await api('/api/state'); } catch(e){ $('me').textContent='daemon not reachable: '+e.message; return; }
   const me=S.self; $('me').innerHTML = `<b>${esc(me.name)}</b> · id ${me.short} · ${me.addrs.join(', ')}:${me.port}`;
   $('incoming').textContent = S.incoming;
@@ -114,7 +115,8 @@ function renderUpdate(){
   else if (u.available) h+=`<span style="color:var(--warn)">${esc(u.latest)} available</span><button onclick="installUpdate()">Update now</button>`;
   h+=`<label class="sub" style="display:flex;gap:6px;align-items:center">Updates <select id="umode" onchange="setMode(this.value)">
       ${['auto','notify','off'].map(m=>`<option value="${m}" ${u.mode===m?'selected':''}>${{auto:'install automatically',notify:'notify only',off:'off'}[m]}</option>`).join('')}
-    </select></label><button class="ghost" onclick="checkUpdate()" title="Check GitHub for a newer release">Check</button>`;
+    </select></label><button class="ghost" onclick="checkUpdate()" title="Check GitHub for a newer release">Check</button>
+    <button class="bad" onclick="stopNode()" title="Stop Wharfdrop completely until you start it again">Stop</button>`;
   $('upd').innerHTML=h;
 }
 async function setMode(m){ await post('/api/settings',{auto_update:m}); document.activeElement.blur(); refresh(); }
@@ -124,6 +126,15 @@ async function checkUpdate(){
   else if(u.dev_build) toast(`Development build. Latest release is ${u.latest}.`);
   else toast(u.available?`${u.latest} is available.`:`You're up to date (${u.current}).`);
   refresh();
+}
+let stopped=false;
+async function stopNode(force){
+  if(!force && !confirm('Stop Wharfdrop? Other devices will not see this one until you start it again.')) return;
+  try{ await post('/api/shutdown'+(force?'?force=1':'')); }
+  catch(e){ if(confirm(e.message+'\n\nStop anyway?')) return stopNode(true); return; }
+  stopped=true;
+  document.querySelector('main').innerHTML='<section class="card" style="grid-column:1/-1;text-align:center;padding:40px"><h2>Wharfdrop is stopped</h2><p>It is not running and uses no resources. Start it again with <span class="mono">wharfdrop start</span> or <span class="mono">wharfdrop ui</span>.</p></section>';
+  $('upd').innerHTML=''; $('me').textContent='';
 }
 async function installUpdate(){
   try{ await post('/api/update/install'); toast('Updated. Restarting…', 6000); }catch(e){ toast(e.message, 6000); }
