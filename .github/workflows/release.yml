@@ -22,6 +22,13 @@ jobs:
         run: go test -count=1 ./...
       - name: Build binaries
         run: ./build.sh "${GITHUB_REF_NAME}"
+      - name: Sign checksums
+        env:
+          WHARFDROP_SIGNING_KEY: ${{ secrets.WHARFDROP_SIGNING_KEY }}
+        run: |
+          go run ./tools/release-sign sign dist/SHA256SUMS
+          # sanity check: the signature must verify with the key built into the app
+          go run ./tools/release-sign verify dist/SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

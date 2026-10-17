@@ -30,15 +30,16 @@ Download the binary for your system from the
 | Linux on ARM (Raspberry Pi 4/5) | `wharfdrop-<version>-linux-arm64` |
 | macOS Apple silicon / Intel | `wharfdrop-<version>-darwin-arm64` / `-darwin-amd64` |
 
-Linux and macOS:
+Linux and macOS (a folder you own, so Wharfdrop can update itself):
 
 ```bash
-chmod +x wharfdrop-*-linux-amd64
-sudo mv wharfdrop-*-linux-amd64 /usr/local/bin/wharfdrop
+mkdir -p ~/.local/bin
+mv wharfdrop-*-linux-amd64 ~/.local/bin/wharfdrop && chmod +x ~/.local/bin/wharfdrop
 ```
 
-Windows: rename the file to `wharfdrop.exe` and put it in a folder on your `PATH`, or run it
-from the folder you saved it in. `SHA256SUMS` in the release lets you verify the download.
+Windows: rename the file to `wharfdrop.exe` and keep it in a folder you own, such as
+`%LOCALAPPDATA%\Programs\Wharfdrop`, then add that folder to your `PATH`.
+`SHA256SUMS` in the release lets you verify the download.
 
 ### Build from source
 
@@ -86,6 +87,35 @@ wharfdrop set incoming ~/Downloads/Wharfdrop
 Incoming files land in `~/Wharfdrop` by default. Config, keys and the UI token are in
 `~/.config/wharfdrop` (Linux) or `%AppData%\wharfdrop` (Windows). Set `WHARFDROP_DIR`
 to use another directory (handy for running two nodes on one machine while testing).
+
+## Updates
+
+Wharfdrop keeps itself up to date from this repository's
+[releases](https://github.com/Kumarsujay03/wharfdrop/releases).
+
+* The running node checks one minute after start and then every 6 hours.
+* By default a new version is **installed automatically**, then Wharfdrop restarts itself.
+  It waits if a transfer is in progress.
+* Change this in the web UI header, or from the terminal:
+
+```bash
+wharfdrop set auto-update auto      # default: install updates automatically
+wharfdrop set auto-update notify    # only tell me (web UI banner, `wharfdrop status`)
+wharfdrop set auto-update off       # never check
+wharfdrop update --check            # check now
+wharfdrop update                    # install now
+wharfdrop version
+```
+
+**How updates stay safe.** Every release's `SHA256SUMS` is signed in CI with an Ed25519
+key, and the matching public key is compiled into Wharfdrop. An update is installed only if
+the signature verifies *and* the downloaded binary matches its signed checksum. A tampered
+file or a release signed with any other key is refused, and the current binary is left
+untouched. Builds from source (`make build`) are development builds and never update
+themselves.
+
+Version v0.1.0 has no updater. Download v0.2.0 or newer once by hand; after that it updates
+itself.
 
 ## Firewall
 
@@ -149,6 +179,8 @@ internal/identity     keys, certificate, fingerprints, pairing code
 internal/config       config.json: name, ports, trusted peers, shares
 internal/discovery    multicast beacons
 internal/daemon       peer API (mTLS), pairing, transfers, loopback API, web UI (ui.html)
+internal/update       signed self-updater
+tools/release-sign    signs release checksums in CI
 ```
 
 ## License

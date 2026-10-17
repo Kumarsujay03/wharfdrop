@@ -54,6 +54,9 @@ type Daemon struct {
 	pendingOut map[string]*PairRequest
 	transfers  *Transfers
 	reachable  map[string]bool // trusted peers that answered a probe recently
+	updMu      sync.Mutex
+	upd        UpdateState
+	restart    chan struct{}
 	peerSrv    *http.Server
 	localSrv   *http.Server
 }
@@ -73,7 +76,8 @@ func New(dir string) (*Daemon, error) {
 	}
 	d := &Daemon{Dir: dir, Cfg: cfg, ID: id, Token: tok,
 		pendingIn: map[string]*PairRequest{}, pendingOut: map[string]*PairRequest{},
-		transfers: NewTransfers(), reachable: map[string]bool{}}
+		transfers: NewTransfers(), reachable: map[string]bool{},
+		restart: make(chan struct{}, 1)}
 	d.Disc = discovery.New(func() discovery.Beacon {
 		var b discovery.Beacon
 		cfg.View(func(c *config.Config) {
@@ -141,13 +145,20 @@ func (d *Daemon) Run(ctx context.Context) error {
 	log.Printf("incoming files go to %s", d.Cfg.IncomingDir)
 	go d.expirePairings(ctx)
 	go d.probePeers(ctx)
+	go d.updateLoop(ctx)
 
-	<-ctx.Done()
+	var result error
+	select {
+	case <-ctx.Done():
+	case <-d.restart:
+		log.Printf("restarting into the updated version")
+		result = ErrRestart
+	}
 	shut, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	d.peerSrv.Shutdown(shut)
 	d.localSrv.Shutdown(shut)
-	return nil
+	return result
 }
 
 func (d *Daemon) UIURL() string {

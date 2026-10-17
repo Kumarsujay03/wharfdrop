@@ -33,6 +33,9 @@ Wharfdrop is designed for devices you own on a network you mostly trust, such as
 - Other local processes or web pages driving the daemon (the loopback API needs a random
   per-install token).
 
+- A tampered or substituted update (updates must carry a valid Ed25519 signature from the
+  release key and match the signed checksum).
+
 **Out of scope**
 
 - A paired device that is itself compromised. Pairing means trust: a paired device can send
@@ -40,3 +43,4 @@ Wharfdrop is designed for devices you own on a network you mostly trust, such as
 - Malware on the same machine running as your user. It can read the private key and token.
 - Users who accept a pairing without comparing the code.
 - Denial of service from devices on the same LAN.
+- Theft of the release signing key itself (held by the maintainer and as a GitHub Actions secret).

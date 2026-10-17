@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"github.com/Kumarsujay03/wharfdrop/internal/config"
 	"github.com/Kumarsujay03/wharfdrop/internal/daemon"
 	"github.com/Kumarsujay03/wharfdrop/internal/identity"
+	"github.com/Kumarsujay03/wharfdrop/internal/update"
 )
 
 const usage = `Wharfdrop %s — secure file sharing between your own devices on the same Wi-Fi/LAN.
@@ -39,7 +41,9 @@ Usage:
   wharfdrop share add <name> <dir> [--to <device>]  share a local folder (read-only)
   wharfdrop share rm <name>
   wharfdrop share ls
-  wharfdrop set name <name> | incoming <dir>
+  wharfdrop set name <name> | incoming <dir> | auto-update <auto|notify|off>
+  wharfdrop update [--check]         install the latest release now (or only check)
+  wharfdrop version
 
 <device> is a device name (as shown by status) or a fingerprint prefix.
 `
@@ -55,6 +59,10 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		serve(dir)
+	case "version", "--version", "-v":
+		fmt.Println("wharfdrop", daemon.Version)
+	case "update":
+		selfUpdate(dir, len(args) > 0 && args[0] == "--check")
 	case "ui":
 		c := cli(dir)
 		url := c.uiURL()
@@ -96,8 +104,10 @@ func main() {
 		case "incoming":
 			abs, _ := filepath.Abs(args[1])
 			body["incoming"] = abs
+		case "auto-update":
+			body["auto_update"] = args[1]
 		default:
-			die("set name|incoming")
+			die("set name|incoming|auto-update")
 		}
 		c.post("/api/settings", body, nil)
 		fmt.Println("ok")
@@ -108,11 +118,61 @@ func main() {
 }
 
 func serve(dir string) {
+	update.CleanupOld()
 	d, err := daemon.New(dir)
 	check(err)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	check(d.Run(ctx))
+	err = d.Run(ctx)
+	stop()
+	if errors.Is(err, daemon.ErrRestart) {
+		check(update.Restart())
+		return
+	}
+	check(err)
+}
+
+// selfUpdate updates through the running daemon (so it restarts itself), or
+// updates the binary directly when no daemon is running.
+func selfUpdate(dir string, checkOnly bool) {
+	if c, ok := tryCLI(dir); ok {
+		var st daemon.UpdateState
+		c.post("/api/update/check", nil, &st)
+		printUpdate(st)
+		if checkOnly || !st.Available {
+			return
+		}
+		fmt.Printf("Installing %s ...\n", st.Latest)
+		c.post("/api/update/install", nil, &st)
+		fmt.Println("Updated. Wharfdrop is restarting with the new version.")
+		return
+	}
+	u := update.New(daemon.Version)
+	ctx := context.Background()
+	latest, err := u.Latest(ctx)
+	check(err)
+	printUpdate(daemon.UpdateState{Current: daemon.Version, Latest: latest,
+		Available: update.Newer(latest, daemon.Version), DevBuild: !update.IsRelease(daemon.Version)})
+	if checkOnly || !update.Newer(latest, daemon.Version) {
+		return
+	}
+	exe, err := update.Executable()
+	check(err)
+	fmt.Printf("Installing %s ...\n", latest)
+	check(u.Install(ctx, latest, exe))
+	fmt.Println("Updated", exe, "to", latest)
+}
+
+func printUpdate(st daemon.UpdateState) {
+	switch {
+	case st.Error != "":
+		fmt.Println("Update check failed:", st.Error)
+	case st.DevBuild:
+		fmt.Printf("Running development build %s. Latest release: %s.\n", st.Current, st.Latest)
+	case st.Available:
+		fmt.Printf("Update available: %s -> %s\n", st.Current, st.Latest)
+	default:
+		fmt.Printf("Up to date (%s).\n", st.Current)
+	}
 }
 
 // ---------- thin client over the loopback API ----------
@@ -123,18 +183,29 @@ type client struct {
 }
 
 func cli(dir string) *client {
+	c, ok := tryCLI(dir)
+	if !ok {
+		die("Wharfdrop is not running. Start it with: wharfdrop serve")
+	}
+	return c
+}
+
+// tryCLI connects to a running daemon, if there is one.
+func tryCLI(dir string) (*client, bool) {
 	cfg, err := config.Load(dir)
-	check(err)
+	if err != nil {
+		return nil, false
+	}
 	tok, err := os.ReadFile(filepath.Join(dir, "ui-token"))
 	if err != nil {
-		die("Wharfdrop is not running. Start it with: wharfdrop serve")
+		return nil, false
 	}
 	c := &client{base: fmt.Sprintf("http://127.0.0.1:%d", cfg.UIPort), token: strings.TrimSpace(string(tok)),
 		http: &http.Client{}}
 	if _, err := c.state(); err != nil {
-		die("Wharfdrop is not running (" + err.Error() + "). Start it with: wharfdrop serve")
+		return nil, false
 	}
-	return c
+	return c, true
 }
 
 func (c *client) uiURL() string { return c.base + "/?t=" + c.token }
@@ -203,7 +274,12 @@ func (c *client) resolve(dev string) string {
 
 func (c *client) status() {
 	s := c.mustState()
-	fmt.Printf("This device: %s  id %s  v%s\n", s.Self.Name, s.Self.Short, s.Self.Version)
+	fmt.Printf("This device: %s  id %s  %s\n", s.Self.Name, s.Self.Short, s.Self.Version)
+	up := "auto-update " + s.Update.Mode
+	if s.Update.Available {
+		up += ", update " + s.Update.Latest + " available (run: wharfdrop update)"
+	}
+	fmt.Printf("Updates:     %s\n", up)
 	fmt.Printf("Addresses:   %s  (peer port %d)\n", strings.Join(s.Self.Addrs, ", "), s.Self.Port)
 	fmt.Printf("Incoming:    %s\nWeb UI:      %s\n\n", s.Incoming, c.uiURL())
 	if len(s.Peers) == 0 {
