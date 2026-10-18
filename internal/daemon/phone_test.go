@@ -116,10 +116,11 @@ func (c *phoneClient) download(token string) ([]byte, error) {
 func startPhoneLink(t *testing.T) (*Daemon, *phoneClient) {
 	d, _ := startNode(t, "computer")
 	d.Cfg.Update(func(c *configT) { c.PhonePort = freePort(t) })
-	url, _, err := d.phones.Start()
+	urls, err := d.phones.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
+	url := urls[0].URL
 	t.Cleanup(func() { d.phones.Stop("test") })
 	// test over loopback instead of the LAN address in the QR code
 	pc := phoneFromURL(t, url)
@@ -225,8 +226,7 @@ func TestPhoneLinkRefusesStrangersAndReplays(t *testing.T) {
 func TestPhoneLinkClosesAndRemembers(t *testing.T) {
 	d, pc := startPhoneLink(t)
 	pc.rpc(map[string]any{"op": "hello", "name": "Kept", "remember": true})
-	pc2url, _, _ := d.phones.Start() // a second QR code
-	_ = pc2url
+	d.phones.Start() // a second QR code
 	d.phones.Stop("test")
 	if d.phones.running() {
 		t.Fatal("phone link should be closed")

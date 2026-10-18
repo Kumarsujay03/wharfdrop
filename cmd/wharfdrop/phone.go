@@ -39,8 +39,10 @@ func phoneCmd(dir string, args []string) {
 		}
 	case "":
 		var out struct {
-			URL      string   `json:"url"`
-			Alts     []string `json:"alts"`
+			URL     string `json:"url"`
+			Options []struct {
+				URL, Label string
+			} `json:"options"`
 			Firewall *struct {
 				Text, Command string
 			} `json:"firewall"`
@@ -52,6 +54,12 @@ func phoneCmd(dir string, args []string) {
 		fmt.Println()
 		fmt.Println("Or open this address on the phone:")
 		fmt.Println("  " + out.URL)
+		if len(out.Options) > 1 {
+			fmt.Println("\nIf the phone cannot connect, this computer has other addresses (use the same #key):")
+			for _, o := range out.Options[1:] {
+				fmt.Printf("  %s\n", o.Label)
+			}
+		}
 		if out.Firewall != nil {
 			fmt.Println("\nIf the phone stays on a blank page: " + out.Firewall.Text)
 			if out.Firewall.Command != "" {

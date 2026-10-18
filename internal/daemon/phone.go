@@ -148,7 +148,14 @@ func open(a cipher.AEAD, aad string, msg []byte) ([]byte, error) {
 // ---------- lifecycle ----------
 
 // Start opens the phone port (if needed) and creates a fresh QR session.
-func (h *phoneHub) Start() (url string, alts []string, err error) {
+// PhoneURL is one way to reach the phone link, with a label for the dialog.
+type PhoneURL struct {
+	URL   string `json:"url"`
+	Label string `json:"label"`
+	QR    string `json:"qr,omitempty"`
+}
+
+func (h *phoneHub) Start() (urls []PhoneURL, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.srv == nil {
@@ -160,7 +167,7 @@ func (h *phoneHub) Start() (url string, alts []string, err error) {
 		})
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
-			return "", nil, fmt.Errorf("could not open phone port %d: %w", port, err)
+			return nil, fmt.Errorf("could not open phone port %d: %w", port, err)
 		}
 		h.port = port
 		h.srv = &http.Server{Handler: h.mux(), ReadHeaderTimeout: 15 * time.Second}
@@ -192,25 +199,21 @@ func (h *phoneHub) Start() (url string, alts []string, err error) {
 	keyText, key := randB64(32)
 	s, err := newSession(id, key, "", false)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	h.sessions[id] = s
 	h.pending = id
 	h.lastActivity = time.Now()
 	frag := "#" + id + "." + keyText
-	addrs := lanAddrs()
-	for i, a := range addrs {
-		u := fmt.Sprintf("http://%s/%s", net.JoinHostPort(a, strconv.Itoa(h.port)), frag)
-		if i == 0 {
-			url = u
-		} else {
-			alts = append(alts, u)
-		}
+	for _, c := range lanCandidates() {
+		urls = append(urls, PhoneURL{
+			URL:   fmt.Sprintf("http://%s/%s", net.JoinHostPort(c.IP, strconv.Itoa(h.port)), frag),
+			Label: friendlyLabel(c)})
 	}
-	if url == "" {
-		return "", nil, errors.New("this computer has no local network address")
+	if len(urls) == 0 {
+		return nil, errors.New("this computer has no local network address")
 	}
-	return url, alts, nil
+	return urls, nil
 }
 
 // Stop closes the phone port and forgets temporary sessions and outbox files.
@@ -295,24 +298,6 @@ func (h *phoneHub) idleLoop(ctx context.Context) {
 			h.Stop("10 minutes without activity")
 		}
 	}
-}
-
-// lanAddrs lists private IPv4 addresses, most likely home-network first.
-func lanAddrs() []string {
-	var a, b, c, other []string
-	for _, ip := range LocalAddrs() {
-		switch {
-		case strings.HasPrefix(ip, "192.168."):
-			a = append(a, ip)
-		case strings.HasPrefix(ip, "10."):
-			b = append(b, ip)
-		case strings.HasPrefix(ip, "172."):
-			c = append(c, ip)
-		default:
-			other = append(other, ip)
-		}
-	}
-	return append(append(append(a, b...), c...), other...)
 }
 
 // QRPNG encodes text as a QR code PNG.
@@ -862,19 +847,24 @@ func (h *phoneHub) State() PhoneState {
 }
 
 func (d *Daemon) lPhoneStart(w http.ResponseWriter, r *http.Request) {
-	url, alts, err := d.phones.Start()
+	urls, err := d.phones.Start()
 	if err != nil {
 		fail(w, err, 500)
 		return
 	}
-	png, err := QRPNG(url)
-	if err != nil {
-		fail(w, err, 500)
-		return
+	if len(urls) > 4 {
+		urls = urls[:4]
 	}
-	writeJSON(w, map[string]any{"url": url, "alts": alts,
-		"qr": "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), "state": d.phones.State(),
-		"firewall": firewallHint(d.phones.port)})
+	for i := range urls {
+		png, err := QRPNG(urls[i].URL)
+		if err != nil {
+			fail(w, err, 500)
+			return
+		}
+		urls[i].QR = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+	}
+	writeJSON(w, map[string]any{"options": urls, "url": urls[0].URL, "qr": urls[0].QR,
+		"state": d.phones.State(), "firewall": firewallHint(d.phones.port)})
 }
 
 func (d *Daemon) lPhoneStop(w http.ResponseWriter, r *http.Request) {

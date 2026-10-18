@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2026-10-18
+
+### Fixed
+- On Windows, the phone QR code could point to the mobile-hotspot adapter (192.168.137.1),
+  which Windows keeps active even when the hotspot is off, so phones on the home Wi-Fi could
+  not connect. Wharfdrop now picks the address of the network card that carries the default
+  route and ranks virtual adapters (mobile hotspot, Hyper-V/WSL, VirtualBox, VMware, Docker,
+  VPNs, link-local) last. The top bar shows the same address.
+
+### Added
+- The QR dialog shows which address it uses and lets you switch to another address of the
+  computer with one click. `wharfdrop phone` lists the other addresses too.
+
 ## [0.5.1] - 2026-10-18
 
 ### Fixed
@@ -135,6 +148,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.5.2]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.4.0

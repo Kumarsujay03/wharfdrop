@@ -206,24 +206,6 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-// LocalAddrs lists this machine's non-loopback IPv4 addresses.
-func LocalAddrs() []string {
-	var out []string
-	ifs, _ := net.Interfaces()
-	for _, i := range ifs {
-		if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, _ := i.Addrs()
-		for _, a := range addrs {
-			if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil {
-				out = append(out, ipn.IP.String())
-			}
-		}
-	}
-	return out
-}
-
 // probePeers checks paired devices at their last known address, so they show
 // as online even on networks where multicast discovery is filtered.
 func (d *Daemon) probePeers(ctx context.Context) {
