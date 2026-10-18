@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.jpg" alt="Wharfdrop: share files between your computers and phones, fast and private" width="100%">
+  <img src="docs/images/banner-v5.jpg" alt="Wharfdrop: share files between your computers and phones, fast and private" width="100%">
 </p>
 
 <p align="center">
