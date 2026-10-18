@@ -308,7 +308,9 @@ devices remember each other's last address.
 * Shares are read-only and jailed to their folder (paths are normalised and checked against
   the root). Only peers listed on a share can see it.
 * Incoming files are written to a `.part` file and renamed when complete; existing names get
-  ` (1)`, ` (2)` suffixes rather than being overwritten.
+  ` (1)`, ` (2)` suffixes rather than being overwritten. If a transfer is cancelled, either
+  side stops, or the sender disappears for 2 minutes, the `.part` file is deleted, so a
+  half-sent file never takes up space. After a crash, the next start deletes them.
 * The loopback API needs a random per-install token, so other local processes or web pages
   cannot drive the daemon.
 * Previews are sandboxed. HTML, SVG, scripts and other active content are always shown as

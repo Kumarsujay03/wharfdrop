@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-10-18
+
+### Fixed
+- The transfer speed jumped between a few KB/s and tens of MB/s, and the two progress cards
+  showed different numbers. Wi-Fi delivers data in bursts, and the speed was measured over
+  0.4-second slices, in two places. Speed is now measured over the last 5 seconds, time left
+  over the last 15 seconds, and both cards use the same measurement. On a simulated lossy
+  Wi-Fi link, the swing in the shown speed dropped from ±7.4 to ±1.6 MB/s. The actual
+  throughput still fills the link.
+- A paired device could show "Offline" in the sidebar during a big send. The status check
+  timed out on the busy link. Transfer traffic now counts as "online", status checks reuse
+  connections, and the header badge updates live.
+- An interrupted transfer left an unfinished file on the receiving device. On Windows, this
+  also kept the full file size reserved. Unfinished files are now deleted in every case:
+  - The sender cancels, stops Wharfdrop, or closes the Wharfdrop window mid-send: deleted
+    within about a second (closing the window: within a minute).
+  - The receiver stops Wharfdrop: deleted before it exits.
+  - Either side crashes, loses power or drops off the network: the receiver deletes it after
+    2 minutes without data. If the receiver itself crashed, it deletes it the next time
+    Wharfdrop starts (it keeps a list of its unfinished files, and only ever deletes those).
+  - A phone closes its page mid-upload: deleted after 2 minutes.
+- Stopping cancels sends and downloads in progress right away instead of waiting for them,
+  so Wharfdrop exits in about a second.
+
 ## [0.6.0] - 2026-10-18
 
 ### Fixed
@@ -171,6 +195,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.6.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.6.0
 [0.5.2]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.1

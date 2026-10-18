@@ -1,8 +1,13 @@
 package daemon
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -111,6 +116,129 @@ func TestStopWithoutPhonesIsQuick(t *testing.T) {
 	d.phones.StopWith("stopped", "x")
 	if time.Since(t0) > 500*time.Millisecond {
 		t.Fatalf("stop took %v", time.Since(t0))
+	}
+}
+
+func pairNodes(t *testing.T) (a, b *Daemon) {
+	t.Helper()
+	a, _ = startNode(t, "alpha")
+	b, bAddr := startNode(t, "beta")
+	pr, err := a.StartPairing(bAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.RespondIncoming(pr.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.ConfirmOutgoing(pr.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "pairing", func() bool {
+		_, ok1 := b.Cfg.Trusted(a.ID.Fingerprint)
+		_, ok2 := a.Cfg.Trusted(b.ID.Fingerprint)
+		return ok1 && ok2
+	})
+	return a, b
+}
+
+// halfSent starts a 64 MB upload from a to b and sends the first 8 MB.
+func halfSent(t *testing.T, a, b *Daemon) (pc *peerClient, id, part string) {
+	t.Helper()
+	pc, err := a.peer(b.ID.Fingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	id, err = pc.startUpload(ctx, "movie.mkv", 64<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pc.putChunk(ctx, id, 0, bytes.NewReader(make([]byte, chunkSize)), chunkSize); err != nil {
+		t.Fatal(err)
+	}
+	part = filepath.Join(b.Cfg.IncomingDir, "movie.mkv.part")
+	if _, err := os.Stat(part); err != nil {
+		t.Fatal("no partial file on the receiver:", err)
+	}
+	return pc, id, part
+}
+
+func gone(p string) bool { _, err := os.Stat(p); return os.IsNotExist(err) }
+
+// The sender stopping mid-transfer deletes the receiver's partial file.
+func TestSenderStopCleansReceiver(t *testing.T) {
+	a, b := pairNodes(t)
+	_, id, part := halfSent(t, a, b)
+	activeUps.Store(id, mustPeer(t, a, b))
+	a.abortOutgoing()
+	waitFor(t, "partial file removed", func() bool { return gone(part) })
+	if _, err := os.Stat(filepath.Join(b.Cfg.IncomingDir, "movie.mkv")); err == nil {
+		t.Fatal("an unfinished file was kept")
+	}
+}
+
+// A goodbye from the sender (e.g. it was killed by an update restart path or
+// lost its abort) also deletes what it was sending.
+func TestGoodbyeCleansReceiver(t *testing.T) {
+	a, b := pairNodes(t)
+	_, _, part := halfSent(t, a, b)
+	a.mu.Lock()
+	a.reachable[b.ID.Fingerprint] = true
+	a.mu.Unlock()
+	a.sayGoodbye()
+	waitFor(t, "partial file removed", func() bool { return gone(part) })
+}
+
+// The receiver stopping deletes its own partial files.
+func TestReceiverStopCleansUp(t *testing.T) {
+	a, b := pairNodes(t)
+	_, _, part := halfSent(t, a, b)
+	b.requestStop("test")
+	waitFor(t, "partial file removed", func() bool { return gone(part) })
+	if !gone(filepath.Join(b.Dir, "partial-files.json")) {
+		t.Fatal("journal not cleared")
+	}
+}
+
+// After a crash, the next start deletes what the journal lists, and only
+// ".part" files.
+func TestJournalCleansAfterCrash(t *testing.T) {
+	dir := t.TempDir()
+	part := filepath.Join(dir, "big.iso.part")
+	keep := filepath.Join(dir, "notes.txt")
+	os.WriteFile(part, []byte("x"), 0o644)
+	os.WriteFile(keep, []byte("x"), 0o644)
+	b, _ := json.Marshal([]string{part, keep})
+	os.WriteFile(filepath.Join(dir, "partial-files.json"), b, 0o600)
+	j := newPartJournal(dir)
+	if n := j.cleanAll(); n != 1 || !gone(part) || gone(keep) {
+		t.Fatalf("cleaned %d, part gone %v, other file gone %v", n, gone(part), gone(keep))
+	}
+}
+
+func mustPeer(t *testing.T, a, b *Daemon) *peerClient {
+	pc, err := a.peer(b.ID.Fingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pc
+}
+
+// Speed is measured over seconds, so a short pause between bursts does not
+// show as a collapse.
+func TestRateIsSteady(t *testing.T) {
+	tr := &Transfer{Started: time.Now().Add(-6 * time.Second), Size: 1 << 30}
+	base := tr.Started
+	// 10 MB/s for 6 s, but delivered in 1-second bursts with nothing between
+	for i := 0; i <= 24; i++ {
+		at := base.Add(time.Duration(i) * 250 * time.Millisecond)
+		n := int64(i/4) * 10 << 20
+		tr.samples = append(tr.samples, sample{at, n})
+	}
+	tr.cur = 6 * 10 << 20
+	r := tr.rateOver(base.Add(6*time.Second), tr.cur, speedWindow) / (1 << 20)
+	if r < 8 || r > 12 {
+		t.Fatalf("shown speed %.1f MB/s, want about 10", r)
 	}
 }
 

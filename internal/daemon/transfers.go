@@ -25,29 +25,66 @@ type Transfer struct {
 	ETA      float64   `json:"eta,omitempty"` // seconds left, when size is known
 	Streams  int       `json:"streams,omitempty"`
 	cur      int64     // progress counter; accessed atomically
-	sampleAt time.Time // last speed sample (guarded by Transfers.mu)
-	sampleN  int64
+	samples  []sample  // recent progress samples (guarded by Transfers.mu)
 }
 
+type sample struct {
+	at time.Time
+	n  int64
+}
+
+const (
+	sampleEvery = 250 * time.Millisecond
+	speedWindow = 5 * time.Second  // shown speed: bytes moved in the last 5 s
+	etaWindow   = 15 * time.Second // time left: steadier, over the last 15 s
+)
+
+// rateOver is the average speed over roughly the last w, from the samples.
+func (t *Transfer) rateOver(now time.Time, done int64, w time.Duration) float64 {
+	var from *sample
+	for i := range t.samples {
+		if now.Sub(t.samples[i].at) <= w {
+			from = &t.samples[i]
+			break
+		}
+	}
+	if from == nil {
+		return 0
+	}
+	// windows shorter than a second are too noisy to show
+	if dt := now.Sub(from.at).Seconds(); dt >= 1 {
+		return float64(done-from.n) / dt
+	}
+	if el := now.Sub(t.Started).Seconds(); el >= 1 {
+		return float64(done) / el
+	}
+	return 0
+}
+
+// snapshot reports progress. Network writes go out in bursts (socket buffers
+// fill, then wait for the Wi-Fi), so speed is measured over a few seconds
+// rather than between two polls.
 func (t *Transfer) snapshot() Transfer {
 	now := time.Now()
 	done := atomic.LoadInt64(&t.cur)
+	t.ETA = 0
 	if t.Finished.IsZero() {
-		// Smoothed instantaneous speed, sampled at most every 400 ms.
-		if t.sampleAt.IsZero() {
-			t.sampleAt, t.sampleN = t.Started, 0
+		if len(t.samples) == 0 {
+			t.samples = append(t.samples, sample{t.Started, 0})
 		}
-		if dt := now.Sub(t.sampleAt).Seconds(); dt >= 0.4 {
-			inst := float64(done-t.sampleN) / dt
-			if t.Rate == 0 {
-				t.Rate = inst
-			} else {
-				t.Rate = 0.55*inst + 0.45*t.Rate
-			}
-			t.sampleAt, t.sampleN = now, done
+		if now.Sub(t.samples[len(t.samples)-1].at) >= sampleEvery {
+			t.samples = append(t.samples, sample{now, done})
+		}
+		// keep a little more than the longest window
+		for len(t.samples) > 2 && now.Sub(t.samples[1].at) > etaWindow+time.Second {
+			t.samples = t.samples[1:]
+		}
+		t.Rate = t.rateOver(now, done, speedWindow)
+		if r := t.rateOver(now, done, etaWindow); t.Size > 0 && r > 1 {
+			t.ETA = float64(t.Size-done) / r
 		}
 	} else {
-		t.Rate = 0
+		t.Rate, t.samples = 0, nil
 	}
 	end := now
 	if !t.Finished.IsZero() {
@@ -56,12 +93,9 @@ func (t *Transfer) snapshot() Transfer {
 	if el := end.Sub(t.Started).Seconds(); el > 0 {
 		t.Avg = float64(done) / el
 	}
-	t.ETA = 0
-	if t.Finished.IsZero() && t.Size > 0 && t.Rate > 1 {
-		t.ETA = float64(t.Size-done) / t.Rate
-	}
 	c := *t
 	c.Done = done
+	c.samples = nil
 	return c
 }
 

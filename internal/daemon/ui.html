@@ -581,7 +581,7 @@ function viewDevice(){
     <div class="page-h">${avatar(p,true)}
       <div class="grow"><h1 class="ellipsis">${esc(p.name)}</h1>
         <div class="muted" style="font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-          <span class="badge ${p.online?'ok':''}">${p.online?'Online':'Offline'}</span>
+          <span class="badge ${p.online?'ok':''}" id="pbadge">${p.online?'Online':'Offline'}</span>
           <span class="mono">${esc(p.addr||'')}</span><span class="faint mono" title="Device fingerprint">${esc(p.fp.slice(0,12))}</span></div></div>
       <button class="btn ghost sm" data-act="unpair" data-fp="${p.fp}">Unpair</button>
     </div>
@@ -826,13 +826,20 @@ function renderLive(){
     if(u.error) t += ` <span style="color:var(--danger)">· ${esc(u.error)}</span>`;
     setHTML(us, t + ` <button class="btn sm" data-act="ucheck">${ic('refresh')} Check now</button>`);
     document.querySelectorAll('#useg button').forEach(b=>b.classList.toggle('sel', b.dataset.v===u.mode)); }
+  const pb=$('#pbadge'); if(pb){ const p=peerByFP(ui.sel); if(p){ pb.textContent=p.online?'Online':'Offline'; pb.classList.toggle('ok',!!p.online); } }
   const ub=$('#upbar'); if(ub){ const u=ui.upload;
     if(!u) setHTML(ub,'');
-    else { const pct=u.total?Math.min(100,u.loaded*100/u.total):0; const eta=u.rate>1?(u.total-u.loaded)/u.rate:0;
+    else {
+      // Big files: show the computer's own measurement (the same numbers as the
+      // transfer list), not the browser's, which runs ahead in bursts.
+      const tr=u.tid && S ? S.transfers.find(x=>x.id===u.tid) : null;
+      let loaded=u.loaded, rate=u.rate, eta=u.rate>1?(u.total-u.loaded)/u.rate:0;
+      if(tr){ loaded=u.base+tr.done; rate=tr.rate; const steady=tr.eta>0?(tr.size-tr.done)/tr.eta:0; eta=steady>1?(u.total-loaded)/steady:0; }
+      const pct=u.total?Math.min(100,loaded*100/u.total):0;
       setHTML(ub, `<div class="card card-b upcard"><div class="uprow"><span class="ellipsis"><b>Sending ${u.count} item${u.count>1?'s':''}</b> to ${esc(u.peer)}${u.current?` <span class="muted">· ${esc(u.current)}</span>`:''}</span>
         <button class="btn sm ghost danger" data-act="cancel-upload">${ic('x')} Cancel</button></div>
         <div class="bar big"><i style="width:${pct.toFixed(1)}%"></i></div>
-        <div class="upstats"><span><b>${Math.floor(pct)}%</b> · ${fmt(u.loaded)} of ${fmt(u.total)}</span><span class="live">${u.rate>0?rateTxt(u.rate):'Starting…'}${eta?` · ${fmtDur(eta)} left`:''}</span></div></div>`); } }
+        <div class="upstats"><span><b>${Math.floor(pct)}%</b> · ${fmt(loaded)} of ${fmt(u.total)}</span><span class="live">${rate>0?rateTxt(rate):'Starting…'}${eta?` · ${fmtDur(eta)} left`:''}</span></div></div>`); } }
 }
 
 // ---------- pairing & dialogs ----------
@@ -901,12 +908,14 @@ function xhrSend(method, url, body, onProgress){
   });
 }
 
+// Speed over the last 5 seconds; shorter windows swing wildly because the
+// network sends in bursts.
 function trackRate(){
   const u=ui.upload; if(!u) return; const now=performance.now();
-  if(!u.sampleAt){ u.sampleAt=now; u.sampleLoaded=u.loaded; return; }
-  const dt=(now-u.sampleAt)/1000; if(dt<0.4) return;
-  const inst=(u.loaded-u.sampleLoaded)/dt; u.rate = u.rate ? 0.55*inst+0.45*u.rate : inst;
-  u.sampleAt=now; u.sampleLoaded=u.loaded;
+  const s=u.samples||(u.samples=[{at:now,n:u.loaded}]);
+  if(now-s[s.length-1].at>=250) s.push({at:now,n:u.loaded});
+  while(s.length>2 && now-s[1].at>5000) s.shift();
+  const dt=(now-s[0].at)/1000; if(dt>=1) u.rate=(u.loaded-s[0].n)/dt;
 }
 
 // Sends one big file as parallel 8 MB chunks. Returns false if the other
@@ -915,6 +924,7 @@ async function sendChunked(p, file, rel, base){
   let st;
   try{ st=JSON.parse(await xhrSend('POST','/api/send/start', JSON.stringify({peer:p.fp, name:rel, size:file.size}))); }
   catch(e){ if(e.status===409) return false; throw e; }
+  ui.upload.tid=st.tid; ui.upload.base=base;
   const chunk=st.chunk, streams=st.streams||4, perChunk=new Map(); let next=0, failed=null;
   const report=()=>{ let sum=0; for(const v of perChunk.values()) sum+=v; ui.upload.loaded=base+sum; trackRate(); renderLive(); };
   const worker=async()=>{
@@ -930,6 +940,7 @@ async function sendChunked(p, file, rel, base){
   await Promise.all(Array.from({length:streams}, worker));
   if(failed||uploadCancelled){ try{ await xhrSend('POST',`/api/send/finish?id=${st.id}&abort=1`,null); }catch{} throw failed||new Error('cancelled'); }
   await xhrSend('POST',`/api/send/finish?id=${st.id}`,null);
+  ui.upload.tid=null; ui.upload.samples=null;
   return true;
 }
 

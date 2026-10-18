@@ -288,7 +288,7 @@ func (h *phoneHub) StopWith(code, why string) {
 	h.tokens = map[string]*dlToken{}
 	for id, u := range h.uploads {
 		u.f.Close()
-		os.Remove(u.tmp)
+		h.d.parts.drop(u.tmp)
 		h.d.transfers.Finish(u.t, errors.New("phone link closed"))
 		delete(h.uploads, id)
 	}
@@ -326,8 +326,17 @@ func (h *phoneHub) idleLoop(ctx context.Context) {
 		h.mu.Lock()
 		on := h.srv != nil
 		idle := time.Since(h.lastActivity)
-		busy := len(h.uploads) > 0
 		now := time.Now()
+		// a phone that closed its page mid-upload: delete the unfinished file
+		for id, u := range h.uploads {
+			if now.Sub(u.last) > inboundIdle {
+				u.f.Close()
+				h.d.parts.drop(u.tmp)
+				h.d.transfers.Finish(u.t, errors.New("the phone stopped sending; the unfinished file was deleted"))
+				delete(h.uploads, id)
+			}
+		}
+		busy := len(h.uploads) > 0
 		for n, at := range h.nonces {
 			if now.Sub(at) > 2*phoneClockSkew {
 				delete(h.nonces, n)
@@ -669,12 +678,15 @@ func (h *phoneHub) upStart(s *phoneSession, req *rpcReq) (any, int) {
 	os.Remove(tmp)
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o644)
 	if err == nil {
+		h.d.parts.add(tmp)
+	}
+	if err == nil {
 		err = f.Truncate(req.Size)
 	}
 	if err != nil {
 		if f != nil {
 			f.Close()
-			os.Remove(tmp)
+			h.d.parts.drop(tmp)
 		}
 		return errOut(err.Error()), 500
 	}
@@ -717,6 +729,9 @@ func (h *phoneHub) upChunk(w http.ResponseWriter, r *http.Request) {
 	}
 	atomic.AddInt64(&u.written, int64(len(plain)))
 	atomic.AddInt64(&u.t.cur, int64(len(plain)))
+	h.mu.Lock()
+	u.last = time.Now()
+	h.mu.Unlock()
 	h.touch()
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -736,17 +751,18 @@ func (h *phoneHub) upFinish(s *phoneSession, id string, abort bool) (any, int) {
 	h.mu.Unlock()
 	err := u.f.Close()
 	if abort {
-		os.Remove(u.tmp)
+		h.d.parts.drop(u.tmp)
 		h.d.transfers.Finish(u.t, errors.New("cancelled on the phone"))
 		return map[string]bool{"ok": true}, 200
 	}
 	if err == nil {
-		err = os.Rename(u.tmp, u.full)
+		err = h.d.parts.keep(u.tmp, u.full)
+	} else {
+		h.d.parts.drop(u.tmp)
 	}
 	atomic.StoreInt64(&u.t.cur, u.size)
 	h.d.transfers.Finish(u.t, err)
 	if err != nil {
-		os.Remove(u.tmp)
 		return errOut(err.Error()), 500
 	}
 	return map[string]any{"saved": filepath.Base(u.full)}, 200
