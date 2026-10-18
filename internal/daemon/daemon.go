@@ -57,6 +57,7 @@ type Daemon struct {
 	updMu      sync.Mutex
 	upd        UpdateState
 	restart    chan struct{}
+	phones     *phoneHub
 	shutdown   chan struct{}
 	peerSrv    *http.Server
 	localSrv   *http.Server
@@ -79,6 +80,7 @@ func New(dir string) (*Daemon, error) {
 		pendingIn: map[string]*PairRequest{}, pendingOut: map[string]*PairRequest{},
 		transfers: NewTransfers(), reachable: map[string]bool{},
 		restart: make(chan struct{}, 1), shutdown: make(chan struct{}, 1)}
+	d.phones = newPhoneHub(d)
 	d.Disc = discovery.New(func() discovery.Beacon {
 		var b discovery.Beacon
 		cfg.View(func(c *config.Config) {
@@ -148,6 +150,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.probePeers(ctx)
 	go d.updateLoop(ctx)
 	go d.expireInbound(ctx)
+	go d.phones.idleLoop(ctx)
 
 	var result error
 	select {
@@ -158,6 +161,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		log.Printf("restarting into the updated version")
 		result = ErrRestart
 	}
+	d.phones.Stop("Wharfdrop stopped")
 	shut, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	d.peerSrv.Shutdown(shut)

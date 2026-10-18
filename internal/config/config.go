@@ -7,12 +7,21 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 type Peer struct {
 	Fingerprint string `json:"fingerprint"`
 	Name        string `json:"name"`
 	LastAddr    string `json:"last_addr,omitempty"` // host:port last seen
+}
+
+// Phone is a phone remembered through the phone link.
+type Phone struct {
+	ID    string    `json:"id"`
+	Name  string    `json:"name"`
+	Key   string    `json:"key"` // base64url session key, shared only via the QR code
+	Added time.Time `json:"added"`
 }
 
 type Share struct {
@@ -30,6 +39,8 @@ type Config struct {
 	UIPort      int              `json:"ui_port"`
 	IncomingDir string           `json:"incoming_dir"`
 	AutoUpdate  string           `json:"auto_update"` // auto | notify | off
+	PhonePort   int              `json:"phone_port,omitempty"`
+	Phones      []*Phone         `json:"phones,omitempty"`
 	Peers       map[string]*Peer `json:"peers"`
 	Shares      []*Share         `json:"shares"`
 }

@@ -51,6 +51,7 @@ Usage:
   wharfdrop set name <name> | incoming <dir> | auto-update <auto|notify|off>
   wharfdrop update [--check]         install the latest release now (or only check)
   wharfdrop version
+  wharfdrop phone [stop|list]        connect a phone: shows a QR code to scan (no app needed)
   wharfdrop uninstall [--yes]        remove Wharfdrop (keeps your received files)
 
 <device> is a device name (as shown by status) or a fingerprint prefix.
@@ -83,6 +84,8 @@ func main() {
 		fmt.Println("Stop it with: wharfdrop stop")
 	case "stop":
 		stop(dir, len(args) > 0 && args[0] == "--force")
+	case "phone":
+		phoneCmd(dir, args)
 	case "uninstall":
 		uninstall(dir, len(args) > 0 && (args[0] == "--yes" || args[0] == "-y"))
 	case "ui":
@@ -461,6 +464,10 @@ func (c *client) allow() {
 }
 
 func (c *client) send(dev string, paths []string) {
+	if p, ok := phoneByName(c.mustState(), dev); ok {
+		sendToPhone(c, p, paths)
+		return
+	}
 	fp := c.resolve(dev)
 	for _, p := range paths {
 		abs, err := filepath.Abs(p)

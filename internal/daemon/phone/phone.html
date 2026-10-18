@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#09090b">
+<meta name="referrer" content="no-referrer">
+<title>Wharfdrop</title>
+<style>
+:root{
+  --bg:#f7f7f8;--surface:#fff;--surface-2:#f1f2f4;--border:#e4e4e7;--text:#18181b;--muted:#63636e;--faint:#9a9aa5;
+  --accent:#0f766e;--accent-fg:#fff;--accent-soft:rgba(13,148,136,.10);--grad:linear-gradient(135deg,#0d9488,#0891b2);
+  --ok:#16a34a;--danger:#dc2626;--danger-soft:rgba(220,38,38,.09);--shadow:0 1px 2px rgba(0,0,0,.06);color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#09090b;--surface:#131316;--surface-2:#1c1c20;--border:#26262b;--text:#f4f4f5;--muted:#a1a1aa;--faint:#6b6b75;
+  --accent:#2dd4bf;--accent-fg:#042f2e;--accent-soft:rgba(45,212,191,.12);--grad:linear-gradient(135deg,#2dd4bf,#22d3ee);
+  --ok:#4ade80;--danger:#f87171;--danger-soft:rgba(248,113,113,.12);--shadow:0 1px 2px rgba(0,0,0,.4);color-scheme:dark;
+}}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;min-height:100dvh}
+button,input{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.logo{width:36px;height:36px;border-radius:11px;background:var(--grad);display:grid;place-items:center;color:var(--accent-fg);flex:none}
+.peer{flex:1;min-width:0}
+.peer b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.peer span{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}.dot.on{background:var(--ok)}
+.iconbtn{width:42px;height:42px;border-radius:12px;border:1px solid var(--border);background:var(--surface);display:grid;place-items:center;cursor:pointer;flex:none}
+.cav{width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;display:none}
+main{flex:1;padding:16px 16px calc(96px + env(safe-area-inset-bottom));max-width:720px;width:100%;margin:0 auto}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:6px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(12px);border-top:1px solid var(--border)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border:0;border-radius:12px;background:none;color:var(--muted);font-size:12.5px;font-weight:600;cursor:pointer;position:relative}
+.tab.sel{color:var(--accent);background:var(--accent-soft)}
+.tab .count{position:absolute;top:4px;right:calc(50% - 22px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--danger);color:#fff;font-size:11px;display:grid;place-items:center}
+.i{width:22px;height:22px;flex:none}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow)}
+.pick{display:flex;flex-direction:column;gap:12px;padding:20px}
+.bigbtn{display:flex;align-items:center;gap:14px;width:100%;padding:18px;border-radius:16px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;text-align:left}
+.bigbtn.primary{background:var(--grad);color:var(--accent-fg);border-color:transparent}
+.bigbtn b{display:block;font-size:16.5px}.bigbtn small{opacity:.8;font-size:13px}
+h2{font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:22px 4px 10px}
+.list{display:flex;flex-direction:column}
+.item{display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:1px solid var(--border);min-width:0}
+.list .item:first-child{border-top:0}
+.item .meta{flex:1;min-width:0}
+.item .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .sub{font-size:13px;color:var(--muted);margin-top:2px}
+.item .live{color:var(--accent);font-weight:600}
+.ficon{width:42px;height:42px;border-radius:12px;background:var(--surface-2);display:grid;place-items:center;color:var(--muted);flex:none;overflow:hidden}
+.ficon.folder{background:var(--accent-soft);color:var(--accent)}
+.ficon img{width:100%;height:100%;object-fit:cover}
+.bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:var(--grad);transition:width .3s}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);font-weight:600;cursor:pointer;flex:none}
+.btn.primary{background:var(--grad);color:var(--accent-fg);border-color:transparent}
+.btn.ghost{border-color:transparent;background:none}
+.btn.danger{color:var(--danger)}
+.crumbs{display:flex;align-items:center;gap:8px;margin:4px 2px 12px;min-width:0}
+.crumbs b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{text-align:center;color:var(--muted);padding:40px 20px}
+.empty .big{width:64px;height:64px;border-radius:20px;background:var(--surface-2);display:grid;place-items:center;margin:0 auto 12px;color:var(--muted)}
+.empty h3{color:var(--text);font-size:18px;margin-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px}
+.gtile{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:6px;cursor:pointer;text-align:left;min-width:0}
+.gthumb{aspect-ratio:1;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;overflow:hidden;color:var(--muted)}
+.gthumb img{width:100%;height:100%;object-fit:cover}
+.gtile .nm{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:6px 2px 0}
+.sheet-bg{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center}
+.sheet-bg.on{display:flex}
+.sheet{width:100%;max-width:560px;background:var(--surface);border-radius:22px 22px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
+.sheet h3{font-size:19px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted);font-weight:600}
+.input{height:46px;border-radius:12px;border:1px solid var(--border);background:var(--bg);padding:0 14px;width:100%}
+.switch{display:flex;align-items:center;gap:12px;font-weight:600}
+.switch input{width:22px;height:22px;accent-color:var(--accent)}
+.note{font-size:13.5px;color:var(--muted)}
+.banner{margin:0 0 14px;padding:12px 14px;border-radius:14px;background:var(--danger-soft);color:var(--danger);font-size:14px;display:none}
+.banner.on{display:block}
+.viewer{position:fixed;inset:0;z-index:30;background:#000;display:none;flex-direction:column}
+.viewer.on{display:flex}
+.viewer .vtop{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;color:#fff}
+.viewer .vtop b{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.viewer img{flex:1;min-height:0;width:100%;object-fit:contain}
+.viewer .iconbtn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.15);color:#fff}
+.gate{max-width:420px;margin:12vh auto 0;text-align:center;padding:0 16px}
+.gate .logo{width:64px;height:64px;border-radius:18px;margin:0 auto 18px}
+.gate h1{font-size:23px;margin-bottom:8px}
+.gate p{color:var(--muted)}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+<div id="gate" class="gate hidden"></div>
+<div id="app" class="hidden">
+  <header class="top">
+    <span class="logo"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6v12m0 0-3.5-3.5M8 18l3.5-3.5M16 18V6m0 0-3.5 3.5M16 6l3.5 3.5"/></svg></span>
+    <img id="cav" class="cav" alt="">
+    <div class="peer"><b id="cname">Wharfdrop</b><span><i class="dot" id="cdot"></i><span id="cstatus">Connecting…</span></span></div>
+    <button class="iconbtn" id="menu" aria-label="Settings"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+  </header>
+  <main>
+    <div class="banner" id="banner"></div>
+    <section id="v-send"></section>
+    <section id="v-recv" class="hidden"></section>
+    <section id="v-browse" class="hidden"></section>
+  </main>
+  <nav class="tabs">
+    <button class="tab sel" data-tab="send"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>Send</button>
+    <button class="tab" data-tab="recv"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>Receive<span class="count hidden" id="rcount"></span></button>
+    <button class="tab" data-tab="browse"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>Browse</button>
+  </nav>
+</div>
+<div class="sheet-bg" id="sheet"><div class="sheet">
+  <h3>This phone</h3>
+  <label class="field">Name shown on the computer<input class="input" id="pname" maxlength="40" autocomplete="off"></label>
+  <label class="switch"><input type="checkbox" id="premember"> Remember this phone</label>
+  <p class="note">Remembered phones reconnect from this page without scanning a new QR code, while the phone link is open on the computer. The link closes after 10 minutes without activity.</p>
+  <div style="display:flex;gap:10px;justify-content:space-between">
+    <button class="btn danger" id="pdisconnect">Disconnect</button>
+    <button class="btn primary" id="psave">Save</button>
+  </div>
+</div></div>
+<div class="viewer" id="viewer"><div class="vtop"><b id="vname"></b><button class="iconbtn" id="vsave" aria-label="Save">⤓</button><button class="iconbtn" id="vclose" aria-label="Close">✕</button></div><img id="vimg" alt=""></div>
+<input type="file" id="fmedia" accept="image/*,video/*" multiple hidden>
+<input type="file" id="fany" multiple hidden>
+<script type="module" src="/phone.js"></script>
+</body>
+</html>

@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-10-18
+
+### Added
+- **Phones, with no app.** Click **Connect a phone** (or run `wharfdrop phone`) and scan the QR
+  code. The phone's browser can send photos, videos and files to the computer, receive files the
+  computer sends, and browse shared folders with photo thumbnails and a photo viewer. Live speed
+  and time left are shown on the phone too.
+- End-to-end encryption for phones: a 256-bit key travels only in the QR code's URL fragment, and
+  all traffic is sealed with XChaCha20-Poly1305 (vendored @noble/ciphers on the phone,
+  `golang.org/x/crypto` on the computer). Replay protection, single-use download links and
+  rate-limiting of failed attempts.
+- **Remember this phone**, so it reconnects without scanning while the phone link is open.
+- The phone link opens on demand and closes after 10 minutes without activity.
+- Phones appear in the sidebar; select one to send it files. `wharfdrop send <phone> <file>`,
+  `wharfdrop phone list` and `wharfdrop phone stop` in the terminal, with a QR code drawn in
+  the terminal.
+
+### Changed
+- Building from source needs Go 1.26 and fetches two small dependencies.
+
 ## [0.4.0] - 2026-10-18
 
 ### Added
@@ -103,6 +123,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.5.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.3.0
 [0.2.2]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.2

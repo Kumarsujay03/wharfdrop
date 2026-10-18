@@ -11,7 +11,9 @@ Thanks for taking the time to contribute!
 
 ## Development setup
 
-You need Go 1.22 or newer. There are no third-party dependencies.
+You need Go 1.26 or newer. Dependencies are kept minimal: `golang.org/x/crypto` (XChaCha20-Poly1305
+for the phone link) and `rsc.io/qr` (QR codes). The phone page vendors four unmodified files from
+[@noble/ciphers](https://github.com/paulmillr/noble-ciphers); see `internal/daemon/phone/noble/VENDORED.txt`.
 
 ```bash
 git clone https://github.com/Kumarsujay03/wharfdrop.git

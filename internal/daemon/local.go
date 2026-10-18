@@ -51,6 +51,12 @@ func (d *Daemon) localMux() http.Handler {
 	api.HandleFunc("POST /api/peer/download", d.lPeerDownload)
 	api.HandleFunc("POST /api/send", d.lSendUpload)
 	api.HandleFunc("POST /api/send-path", d.lSendPath)
+	api.HandleFunc("POST /api/phone/start", d.lPhoneStart)
+	api.HandleFunc("POST /api/phone/stop", d.lPhoneStop)
+	api.HandleFunc("POST /api/phone/forget", d.lPhoneForget)
+	api.HandleFunc("POST /api/phone/send", d.lPhoneSend)
+	api.HandleFunc("POST /api/phone/send-path", d.lPhoneSendPath)
+	api.HandleFunc("POST /api/phone/unoffer", d.lPhoneUnoffer)
 	api.HandleFunc("GET /api/avatar", d.lAvatarGet)
 	api.HandleFunc("POST /api/avatar", d.lAvatarSet)
 	api.HandleFunc("DELETE /api/avatar", d.lAvatarDelete)
@@ -124,6 +130,7 @@ type State struct {
 	PendingOut []PairRequest   `json:"pending_out"`
 	Transfers  []Transfer      `json:"transfers"`
 	Update     UpdateState     `json:"update"`
+	Phone      PhoneState      `json:"phone"`
 }
 
 func (d *Daemon) state() State {
@@ -175,6 +182,7 @@ func (d *Daemon) state() State {
 	d.mu.Unlock()
 	s.Transfers = d.transfers.List()
 	s.Update = d.updateState()
+	s.Phone = d.phones.State()
 	return s
 }
 
