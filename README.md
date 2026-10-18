@@ -280,6 +280,16 @@ $env:WHARFDROP_UNINSTALL=1; irm https://raw.githubusercontent.com/Kumarsujay03/w
 Not yet. Wharfdrop runs on Linux, Windows and macOS computers. Its web interface only opens
 on the computer that runs it, so a phone cannot use it today. Phone support is on the roadmap.
 
+**Does installing put the source code on my computer?**
+No. The installers and the release downloads contain only the single `wharfdrop` program file.
+You only get the source code if you choose to clone this repository to build it yourself.
+
+**Is it less secure because the code is public?**
+No. Wharfdrop's security comes from keys, not secrecy. Each device's private key is created on
+that device and never leaves it, connections are encrypted with TLS 1.3, and updates must carry
+a signature from a release key that is not in this repository. Public code lets anyone check
+how this works.
+
 **Is anything sent over the internet?**
 No. Devices talk directly over your local network. The only internet access is the optional
 update check against this repository's releases, which you can turn off in Settings.
