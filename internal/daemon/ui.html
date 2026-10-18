@@ -209,6 +209,10 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .dialog .ico{width:50px;height:50px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
 .qrdlg{max-width:460px;max-height:calc(100vh - 32px);overflow:auto}
 .qrdlg summary{cursor:pointer;padding:4px 0}
+.qraddr{text-align:center;font-size:13px;color:var(--muted);margin:-4px 0 10px}
+.qraddr b{color:var(--text)}
+.qralts{margin:0 0 12px;font-size:13px;color:var(--muted)}
+.qralts div{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .fwnote{margin:6px 0 10px;padding:12px 14px;border-radius:12px;background:var(--warn-soft);font-size:13.5px}
 .fwnote b{display:flex;align-items:center;gap:6px;color:var(--warn)}
 .fwnote p{margin:6px 0 8px;color:var(--text)}
@@ -832,14 +836,15 @@ function renderModal(){
       <h2>Pairing with ${esc(out.peer_name)}</h2><p>${out.local_confirmed?`Waiting for ${esc(out.peer_name)} to tap Allow…`:`Check that ${esc(out.peer_name)} shows the same code.`}</p>${code(out.code)}
       <div class="acts"><button class="btn" data-act="pcancel" data-id="${out.id}">Cancel</button>${out.local_confirmed?'':`<button class="btn primary" data-act="pconfirm" data-id="${out.id}">${ic('check')} Codes match</button>`}</div></div></div>`);
   } else if(ui.qr){
-    const q=ui.qr;
+    const q=ui.qr, o=q.opts[q.sel];
     setHTML(m, `<div class="modal" data-act="qr-bg"><div class="dialog qrdlg" role="dialog" aria-modal="true">
       <div class="ico">${ic('phone','i-lg')}</div><h2>Connect a phone</h2>
       <p>Scan this code with your phone's camera. The phone must be on the same Wi-Fi as this computer. No app is needed.</p>
-      <div class="qrbox"><img src="${q.qr}" alt="QR code for the phone link"></div>
+      <div class="qrbox"><img src="${o.qr}" alt="QR code for the phone link"></div>
+      <div class="qraddr">Address: <b>${esc(o.label||o.url.split('/')[2])}</b></div>
+      ${q.opts.length>1?`<div class="qralts"><span>Phone not connecting? Try another address of this computer:</span><div>${q.opts.map((x,i)=>`<button class="btn sm ${i===q.sel?'primary':''}" data-act="qr-pick" data-i="${i}">${esc(x.label||x.url.split('/')[2])}</button>`).join('')}</div></div>`:''}
       ${q.firewall?`<div class="fwnote"><b>${ic('alert')} Phone stuck on a blank page?</b><p>${esc(q.firewall.text)}</p>${q.firewall.command?`<div class="cmdline"><code>${esc(q.firewall.command)}</code><button class="btn sm" data-act="copy" data-text="${esc(q.firewall.command)}">Copy</button></div>`:''}</div>`:''}
-      <details class="muted" style="font-size:13px"><summary>Can't scan? Type this address on the phone</summary><div class="mono" style="word-break:break-all;margin-top:6px">${esc(q.url)}</div>
-        ${(q.alts||[]).length?`<div style="margin-top:6px">Other addresses of this computer: ${q.alts.map(a=>`<div class="mono" style="word-break:break-all">${esc(a)}</div>`).join('')}</div>`:''}</details>
+      <details class="muted" style="font-size:13px"><summary>Can't scan? Type this address on the phone</summary><div class="mono" style="word-break:break-all;margin-top:6px">${esc(o.url)}</div></details>
       <p style="font-size:13px;margin-top:10px">Everything is encrypted with a key inside this QR code. The phone link closes after 10 minutes without activity.</p>
       <div class="acts"><button class="btn" data-act="phone-stop">Close phone link</button><button class="btn primary" data-act="qr-close">Done</button></div></div></div>`);
   } else if(ui.addip){
@@ -970,10 +975,11 @@ const ACT = {
   'pick-avatar': () => $('#avin').click(),
   'remove-avatar': async () => { await api('/api/avatar',{method:'DELETE'}); await refresh(); renderMain(); toast('Profile picture removed'); },
   'phone-connect': async () => {
-    try{ const r=await post('/api/phone/start'); ui.qr={qr:r.qr,url:r.url,alts:r.alts,firewall:r.firewall, known:new Set((S.phone.phones||[]).filter(f=>f.online).map(f=>f.id))}; renderModal(); await refresh(); }
+    try{ const r=await post('/api/phone/start'); ui.qr={opts:r.options||[{url:r.url,qr:r.qr,label:''}],sel:0,firewall:r.firewall, known:new Set((S.phone.phones||[]).filter(f=>f.online).map(f=>f.id))}; renderModal(); await refresh(); }
     catch(e){ toast(e.message,'err'); } },
   'phone-stop': async () => { ui.qr=null; renderModal(); await post('/api/phone/stop'); await refresh(); toast('Phone link closed'); },
   copy: async d => { try{ await navigator.clipboard.writeText(d.text); toast('Copied'); }catch{ toast('Select the text and copy it','err'); } },
+  'qr-pick': d => { ui.qr.sel=+d.i; renderModal(); },
   'qr-close': () => { ui.qr=null; renderModal(); },
   'qr-bg': (d,e) => { if(e.target.classList.contains('modal')){ ui.qr=null; renderModal(); } },
   'phone-select': d => { ui.view='phone'; ui.phone=d.id; renderMain(); },
