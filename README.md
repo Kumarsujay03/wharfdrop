@@ -1,24 +1,41 @@
 <p align="center">
-  <img src="docs/images/banner.jpg" alt="Wharfdrop: share files between your own devices, fast and private" width="100%">
+  <img src="docs/images/banner.jpg" alt="Wharfdrop: share files between your computers and phones, fast and private" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/Kumarsujay03/wharfdrop/actions/workflows/ci.yml"><img src="https://github.com/Kumarsujay03/wharfdrop/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/Kumarsujay03/wharfdrop/releases/latest"><img src="https://img.shields.io/github/v/release/Kumarsujay03/wharfdrop?color=0d9488" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0d9488.svg" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-0891b2" alt="Linux, Windows, macOS">
+  <img src="https://img.shields.io/badge/computers-Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-0891b2" alt="Linux, Windows, macOS">
+  <img src="https://img.shields.io/badge/phones-iPhone%20%C2%B7%20Android%20(browser)-0891b2" alt="iPhone and Android in the browser">
 </p>
 
 # Wharfdrop
 
-**Secure, fast file sharing between your own computers on the same Wi-Fi or network.**
-One small program for Linux, Windows and macOS. No accounts, no cloud, no internet needed.
+**Secure, fast file sharing between your own computers and phones on the same Wi-Fi.**
+One small program for Linux, Windows and macOS. Phones join through their browser by scanning a
+QR code. No accounts, no cloud, no internet needed.
 
-Install it on two computers, pair them once with a 6-digit code, and then send files, share
-folders, and browse and preview each other's shared files from a clean web interface or the
-terminal.
+<p align="center">
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="#phones"><b>Phones</b></a> ·
+  <a href="#security-model"><b>Security</b></a> ·
+  <a href="#speed"><b>Speed</b></a> ·
+  <a href="#faq"><b>FAQ</b></a>
+</p>
+
+## Quick start
+
+1. **Install** Wharfdrop on each computer ([Windows](#windows), [Linux and macOS](#linux-and-macos)).
+2. **Open it** with `wharfdrop ui` (or double-click it on Windows). Computers on the same network
+   find each other. Click **Pair** and confirm the same 6-digit code on both screens.
+3. **Share.** Drag files onto a device to send them, share folders for others to browse, and click
+   **Connect a phone** to add a phone with a QR code.
 
 ## Features
+
+**Computers**
 
 * **Finds your devices automatically** on the local network. It doesn't matter whether one is
   on 2.4 GHz and the other on 5 or 6 GHz, as long as both use the same router.
@@ -30,13 +47,23 @@ terminal.
 * **Browse with previews.** Switch between grid and list view, see photo thumbnails, and open
   photos, videos, audio, PDFs and text files in a built-in viewer. Download single files or
   whole folders as a zip.
-* **Runs only when you want it.** Start it, use it, stop it. It never starts at login.
+
+**Phones**
+
+* **No app to install.** Scan a QR code and the phone's browser connects.
+* **Send** photos, videos and files to the computer, **receive** files it sends, and **browse**
+  its shared folders with thumbnails, all with live speed.
+* **Encrypted inside the page** with a key that only travels in the QR code.
+* **Remember this phone** to reconnect without scanning again.
+
+**Everyday use**
+
+* **Runs only when you want it.** Start it, use it, stop it. It never starts at login, and the
+  phone link closes after 10 minutes without activity.
 * **Keeps itself up to date** with signed updates from this repository's releases.
-* **Phones too, with no app.** Scan a QR code and the phone's browser can send photos and
-  files to the computer, save files the computer sends, and browse shared folders. Everything
-  is end-to-end encrypted with a key inside the QR code.
-* **Profile pictures** so your paired devices are easy to tell apart.
+* **Profile pictures** so your devices are easy to tell apart.
 * **Web UI and CLI.** Everything in the interface can also be done from the terminal.
+* **Clean uninstall** that keeps your received files.
 
 ## Screenshots
 
@@ -273,6 +300,9 @@ devices remember each other's last address.
   cannot drive the daemon.
 * Previews are sandboxed. HTML, SVG, scripts and other active content are always shown as
   plain text, so a file shared by another device can never run code in your Wharfdrop page.
+* Phones use a separate, on-demand link. Everything is encrypted inside the page with
+  XChaCha20-Poly1305 and a 256-bit key carried only in the QR code; requests are replay-checked
+  and download links work once. See [Phones](#phones) and [SECURITY.md](SECURITY.md).
 
 ## Speed
 
