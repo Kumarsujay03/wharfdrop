@@ -36,11 +36,12 @@ type Discovery struct {
 	self  func() Beacon
 	mu    sync.Mutex
 	found map[string]*Found
+	quiet map[string]time.Time // fingerprint -> ignore its beacons until
 	stop  chan struct{}
 }
 
 func New(self func() Beacon) *Discovery {
-	return &Discovery{self: self, found: map[string]*Found{}, stop: make(chan struct{})}
+	return &Discovery{self: self, found: map[string]*Found{}, quiet: map[string]time.Time{}, stop: make(chan struct{})}
 }
 
 func (d *Discovery) Start() {
@@ -64,6 +65,15 @@ func (d *Discovery) Peers() []Found {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// Forget drops a peer that said goodbye and ignores its beacons briefly, so a
+// beacon still in flight does not bring it back.
+func (d *Discovery) Forget(fp string) {
+	d.mu.Lock()
+	delete(d.found, fp)
+	d.quiet[fp] = time.Now().Add(4 * time.Second)
+	d.mu.Unlock()
 }
 
 func (d *Discovery) Lookup(fp string) (Found, bool) {
@@ -128,6 +138,13 @@ func (d *Discovery) listen() {
 		}
 		addr := net.JoinHostPort(src.IP.String(), itoa(b.Port))
 		d.mu.Lock()
+		if until, ok := d.quiet[b.FP]; ok {
+			if time.Now().Before(until) {
+				d.mu.Unlock()
+				continue
+			}
+			delete(d.quiet, b.FP)
+		}
 		d.found[b.FP] = &Found{Name: b.Name, FP: b.FP, Addr: addr, LastSeen: time.Now()}
 		d.mu.Unlock()
 	}

@@ -452,7 +452,13 @@ function ask({title, text, ok='Confirm', danger=false, icon='alert'}){
 }
 
 // ---------- state ----------
-let S = null, firstLoad = true, stopped = false;
+let S = null, firstLoad = true, stopped = false, down = false, fails = 0;
+const TAB = Math.random().toString(36).slice(2, 12);
+
+// A full-window message for when Wharfdrop is stopped or unreachable.
+function downScreen(icon, title, html){
+  document.body.innerHTML = `<div class="stopped"><div class="empty"><div class="big">${ic(icon,'i-lg')}</div><h3>${esc(title)}</h3><p>${html}</p></div></div>`;
+}
 const seenDone = new Set();
 const ui = {
   view:'device', sel:null, tab:'files', dialog:null, addip:false,
@@ -466,8 +472,14 @@ const nearby = () => (S?.peers||[]).filter(p=>!p.trusted).sort((a,b)=>a.name.loc
 
 async function refresh(){
   if(stopped) return;
-  try { S = await api('/api/state'); }
-  catch(e){ setHTML($('#me'), `<span class="dot"></span><span>Not connected</span>`); return; }
+  try { S = await api('/api/state?tab='+TAB); }
+  catch(e){
+    if(++fails >= 2 && !down){ down = true;
+      downScreen('alert', 'Wharfdrop is not running', 'It was stopped or closed on this computer. Start it again from the Start menu or with <span class="mono">wharfdrop ui</span>. This page reconnects by itself when it is running again.'); }
+    else if(!down) setHTML($('#me'), `<span class="dot"></span><span>Not connected</span>`);
+    return; }
+  if(down){ location.reload(); return; }
+  fails = 0;
   if(!ui.sel || !peerByFP(ui.sel)){ const t=trusted()[0] || nearby()[0]; ui.sel = t ? t.fp : null; if(ui.view==='device') renderMain(); }
   notifyReceived();
   if(ui.qr){ const fresh=(S.phone.phones||[]).find(f=>f.online && !ui.qr.known.has(f.id));
@@ -771,6 +783,7 @@ function viewShares(){
 function viewSettings(){
   const m=S.self, u=S.update;
   const seg=(v,l)=>`<button class="${u.mode===v?'sel':''}" data-act="umode" data-v="${v}">${l}</button>`;
+  const cseg=(v,l)=>`<button class="${(S.stop_on_close?'on':'off')===v?'sel':''}" data-act="closemode" data-v="${v}">${l}</button>`;
   return `<div class="page"><div class="page-h"><div class="grow"><h1>Settings</h1></div></div>
   <div class="card">
     <div class="set"><div><h4>Name and picture</h4><p>How this computer appears to your paired devices.</p></div>
@@ -786,6 +799,8 @@ function viewSettings(){
       <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start">
         <div class="seg" id="useg">${seg('auto','Install automatically')}${seg('notify','Notify only')}${seg('off','Off')}</div>
         <div class="inline muted" id="ustatus"></div></div></div>
+    <div class="set"><div><h4>When this window is closed</h4><p>Stopping disconnects phones and frees the network ports. Transfers in progress finish first.</p></div>
+      <div class="seg">${cseg('on','Stop Wharfdrop')}${cseg('off','Keep running')}</div></div>
     <div class="set"><div><h4>This device</h4><p>Compare the fingerprint when pairing over an untrusted network.</p></div>
       <dl class="kv"><dt>Version</dt><dd>${esc(u.current)}</dd><dt>Addresses</dt><dd class="mono">${esc(m.addrs.join(', '))} · port ${m.port}</dd><dt>Fingerprint</dt><dd class="mono" style="word-break:break-all">${esc(m.fp)}</dd></dl></div>
   </div></div>`;
@@ -1008,6 +1023,7 @@ const ACT = {
   'dlg-bg': (d,e) => { if(e.target.classList.contains('modal')) ACT['dlg-no'](); },
   'open-incoming': async () => { try{ await post('/api/open-folder',{which:'incoming'}); }catch(e){ toast(e.message,'err'); } },
   umode: async d => { await post('/api/settings',{auto_update:d.v}); await refresh(); },
+  closemode: async d => { await post('/api/settings',{stop_on_close:d.v==='on'}); await refresh(); renderMain(); toast(d.v==='on'?'Wharfdrop stops when you close its window':'Wharfdrop keeps running when you close its window'); },
   ucheck: async () => { try{ const u=await post('/api/update/check'); toast(u.error?'Update check failed: '+u.error : u.available?`${u.latest} is available`:`You're up to date (${u.current})`, u.error?'err':''); }catch(e){ toast(e.message,'err'); } refresh(); },
   update: async () => { if(!await ask({title:`Install ${S.update.latest}?`, text:'Wharfdrop downloads and verifies the update, then restarts. It takes a few seconds.', ok:'Update', icon:'sparkle'})) return;
     try{ await post('/api/update/install'); toast('Update installed. Restarting…'); setTimeout(()=>location.reload(), 4000); }catch(e){ toast(e.message,'err'); } },
@@ -1016,8 +1032,11 @@ const ACT = {
     try{ await post('/api/shutdown'); }
     catch(e){ if(!await ask({title:'A transfer is in progress', text:'Stopping now cancels it. Stop anyway?', ok:'Stop anyway', danger:true})) return; await post('/api/shutdown?force=1'); }
     stopped=true;
-    document.body.innerHTML = `<div class="stopped"><div class="empty"><div class="big">${ic('check','i-lg')}</div><h3>Wharfdrop is stopped</h3>
-      <p>It is not running and uses no resources. Start it again from the Start menu or with <span class="mono">wharfdrop ui</span>, then reload this page.</p></div></div>`;
+    downScreen('refresh', 'Stopping Wharfdrop…', 'Disconnecting phones and telling paired devices.');
+    // wait until it has really exited
+    for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,250));
+      try{ await fetch('/api/state',{headers:{'X-Token':T}, cache:'no-store'}); }catch{ break; } }
+    downScreen('check', 'Wharfdrop is stopped', 'Everything is closed: connected phones were disconnected, paired devices see this computer as offline, and nothing is left running. You can close this tab. To use it again, start Wharfdrop from the Start menu or with <span class="mono">wharfdrop ui</span>.');
   },
 };
 document.addEventListener('click', e=>{
@@ -1042,7 +1061,11 @@ document.addEventListener('submit', async e=>{
 
 $('#logo').innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${P.logo}</svg>`;
 $('#addbtn').innerHTML = ic('plus');
-async function loop(){ await refresh(); const busy = ui.upload || (S && S.transfers.some(t=>!t.finished)); setTimeout(loop, busy ? 700 : 1500); }
+async function loop(){ if(stopped) return; await refresh(); const busy = !down && (ui.upload || (S && S.transfers.some(t=>!t.finished))); setTimeout(loop, down ? 2000 : busy ? 700 : 1500); }
+// Closing the window tells Wharfdrop; it stops shortly after unless another
+// window is open, the page was only reloaded, or the setting is off.
+addEventListener('pagehide', ()=>{ if(stopped||down) return;
+  try{ fetch('/api/ui-closed?tab='+TAB, {method:'POST', keepalive:true, headers:{'X-Token':T}}); }catch{} });
 loop();
 </script>
 </body>

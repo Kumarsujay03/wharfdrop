@@ -52,7 +52,7 @@ const (
 	phoneIdle      = 10 * time.Minute
 	phoneChunk     = 4 << 20 // plaintext bytes per upload request
 	phoneFrame     = 1 << 20 // plaintext bytes per download frame
-	phoneOnline    = 12 * time.Second
+	phoneOnline    = 7 * time.Second
 	phoneClockSkew = 5 * time.Minute
 )
 
@@ -96,9 +96,21 @@ type phoneUpload struct {
 	last    time.Time
 }
 
+// tombstone remembers a closed session's key for a short while, so the phone
+// gets an authenticated "closed" notice with the reason instead of an error.
+type tombstone struct {
+	aead     cipher.AEAD
+	code     string // forgotten | link-closed | stopped | updating | idle
+	msg      string
+	at       time.Time
+	notified bool
+	wasOn    bool
+}
+
 type phoneHub struct {
 	d            *Daemon
 	mu           sync.Mutex
+	tombs        map[string]*tombstone
 	srv          *http.Server
 	port         int
 	sessions     map[string]*phoneSession
@@ -114,7 +126,7 @@ type phoneHub struct {
 func newPhoneHub(d *Daemon) *phoneHub {
 	return &phoneHub{d: d, sessions: map[string]*phoneSession{}, nonces: map[string]time.Time{},
 		outbox: map[string][]*outItem{}, tokens: map[string]*dlToken{}, uploads: map[string]*phoneUpload{},
-		fails: map[string][]time.Time{}}
+		fails: map[string][]time.Time{}, tombs: map[string]*tombstone{}}
 }
 
 func newSession(id string, key []byte, name string, remember bool) (*phoneSession, error) {
@@ -216,17 +228,55 @@ func (h *phoneHub) Start() (urls []PhoneURL, err error) {
 	return urls, nil
 }
 
-// Stop closes the phone port and forgets temporary sessions and outbox files.
-func (h *phoneHub) Stop(why string) {
+// bury closes a session and keeps a tombstone so the phone learns why.
+// Callers hold h.mu.
+func (h *phoneHub) bury(s *phoneSession, code, msg string) {
+	h.tombs[s.ID] = &tombstone{aead: s.aead, code: code, msg: msg, at: time.Now(),
+		wasOn: !s.LastSeen.IsZero() && time.Since(s.LastSeen) < phoneOnline}
+	delete(h.sessions, s.ID)
+	for _, it := range h.outbox[s.ID] {
+		if it.temp {
+			os.Remove(it.path)
+		}
+	}
+	delete(h.outbox, s.ID)
+}
+
+// Stop closes the phone link. Connected phones are told why (they check in
+// every ~2 s) before the port closes, so their pages show "Disconnected"
+// instead of hanging.
+func (h *phoneHub) Stop(why string) { h.StopWith("link-closed", why) }
+
+func (h *phoneHub) StopWith(code, why string) {
+	h.mu.Lock()
+	if h.srv != nil {
+		for _, s := range h.sessions {
+			h.bury(s, code, why)
+		}
+	}
+	h.mu.Unlock()
+	// give connected phones up to 2.5 s to collect their notice
+	for deadline := time.Now().Add(2500 * time.Millisecond); time.Now().Before(deadline); {
+		h.mu.Lock()
+		waiting := false
+		for _, t := range h.tombs {
+			if t.wasOn && !t.notified && time.Since(t.at) < 3*time.Second {
+				waiting = true
+			}
+		}
+		h.mu.Unlock()
+		if !waiting {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	h.mu.Lock()
 	srv := h.srv
 	h.srv = nil
 	h.pending = ""
-	for id, s := range h.sessions {
-		if !s.Remember {
-			delete(h.sessions, id)
-		}
-	}
+	h.tombs = map[string]*tombstone{}
+	// remembered phones can reconnect next time the link opens
+	h.sessions = map[string]*phoneSession{}
 	for _, items := range h.outbox {
 		for _, it := range items {
 			if it.temp {
@@ -270,8 +320,7 @@ func (h *phoneHub) idleLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			h.Stop("Wharfdrop stopped")
-			return
+			return // Run stops the link with the right reason
 		case <-t.C:
 		}
 		h.mu.Lock()
@@ -289,13 +338,18 @@ func (h *phoneHub) idleLoop(ctx context.Context) {
 				delete(h.tokens, k)
 			}
 		}
+		for k, t := range h.tombs {
+			if now.Sub(t.at) > time.Hour {
+				delete(h.tombs, k)
+			}
+		}
 		h.mu.Unlock()
 		if on && busy {
 			h.touch()
 			continue
 		}
 		if on && idle > phoneIdle {
-			h.Stop("10 minutes without activity")
+			h.StopWith("idle", "The phone link closed after 10 minutes without activity.")
 		}
 	}
 }
@@ -384,8 +438,15 @@ func (h *phoneHub) rpc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "too many attempts", http.StatusTooManyRequests)
 		return
 	}
-	s := h.session(r.Header.Get("X-Session"))
+	sid := r.Header.Get("X-Session")
+	if sid == "" {
+		sid = r.URL.Query().Get("s") // keepalive "bye" requests
+	}
+	s := h.session(sid)
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if s == nil && err == nil && h.tombNotice(w, sid, body) {
+		return
+	}
 	var plain []byte
 	if s != nil && err == nil {
 		plain, err = open(s.aead, "rpc|"+s.ID, body)
@@ -430,6 +491,27 @@ func (h *phoneHub) rpc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	w.Write(seal(s.aead, "rsp|"+s.ID, b))
+}
+
+// tombNotice answers a closed session with an encrypted {"closed": ...}.
+func (h *phoneHub) tombNotice(w http.ResponseWriter, sid string, body []byte) bool {
+	h.mu.Lock()
+	t := h.tombs[sid]
+	h.mu.Unlock()
+	if t == nil {
+		return false
+	}
+	if _, err := open(t.aead, "rpc|"+sid, body); err != nil {
+		return false // not the real phone
+	}
+	h.mu.Lock()
+	t.notified = true
+	h.mu.Unlock()
+	b, _ := json.Marshal(map[string]string{"closed": t.code, "message": t.msg})
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(seal(t.aead, "rsp|"+sid, b))
+	return true
 }
 
 func errOut(msg string) map[string]any { return map[string]any{"error": msg} }
@@ -496,11 +578,26 @@ func (h *phoneHub) handleRPC(s *phoneSession, req *rpcReq) (any, int) {
 		}
 		h.mu.Unlock()
 		return h.phoneState(s), 200
-	case "forget":
+	case "forget", "disconnect":
+		// the phone ends the connection: revoke its key everywhere
 		h.mu.Lock()
 		s.Remember = false
+		delete(h.sessions, s.ID)
+		for _, it := range h.outbox[s.ID] {
+			if it.temp {
+				os.Remove(it.path)
+			}
+		}
+		delete(h.outbox, s.ID)
 		h.mu.Unlock()
 		h.persistPhone(s)
+		return map[string]bool{"ok": true}, 200
+	case "bye":
+		// the phone page was closed (or is reloading): show it offline right
+		// away; the session stays valid so a reload reconnects
+		h.mu.Lock()
+		s.LastSeen = time.Now().Add(-phoneOnline)
+		h.mu.Unlock()
 		return map[string]bool{"ok": true}, 200
 	}
 	return errOut("unknown request"), 400
@@ -868,7 +965,9 @@ func (d *Daemon) lPhoneStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Daemon) lPhoneStop(w http.ResponseWriter, r *http.Request) {
-	d.phones.Stop("closed on this computer")
+	var cname string
+	d.Cfg.View(func(c *config.Config) { cname = c.Name })
+	d.phones.StopWith("link-closed", "The phone link was closed on "+cname+".")
 	writeJSON(w, d.phones.State())
 }
 
@@ -877,13 +976,11 @@ func (d *Daemon) lPhoneForget(w http.ResponseWriter, r *http.Request) {
 	decode(r, &in)
 	h := d.phones
 	h.mu.Lock()
-	delete(h.sessions, in.ID)
-	for _, it := range h.outbox[in.ID] {
-		if it.temp {
-			os.Remove(it.path)
-		}
+	if s := h.sessions[in.ID]; s != nil {
+		var cname string
+		d.Cfg.View(func(c *config.Config) { cname = c.Name })
+		h.bury(s, "forgotten", "This phone was disconnected on "+cname+".")
 	}
-	delete(h.outbox, in.ID)
 	h.mu.Unlock()
 	d.Cfg.Update(func(c *config.Config) {
 		out := c.Phones[:0]

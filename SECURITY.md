@@ -40,7 +40,9 @@ Wharfdrop is designed for devices you own on a network you mostly trust, such as
   chunk is sealed with XChaCha20-Poly1305 using a 256-bit key that only travels inside the QR
   code (in the URL fragment, which browsers never send). Messages are bound to their purpose,
   upload and position, requests carry a timestamp and are refused if replayed, download links
-  work once, and repeated failures from one address are rate-limited.
+  work once, and repeated failures from one address are rate-limited. A disconnected phone's key is
+  revoked at once. The "link closed" notice it gets is sealed with its own key, so it
+  cannot be read or forged by others.
 
 **Out of scope**
 
