@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -350,7 +351,9 @@ func (d *Daemon) lPeerLs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
-// lPeerGet proxies a remote file straight to the browser (download link).
+// lPeerGet proxies a remote file to the browser: as a download, or with
+// inline=1 as a sandboxed preview (Range requests pass through for video
+// seeking), or with thumb=N as a small JPEG thumbnail.
 func (d *Daemon) lPeerGet(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	pc, err := d.peer(q.Get("peer"))
@@ -358,22 +361,44 @@ func (d *Daemon) lPeerGet(w http.ResponseWriter, r *http.Request) {
 		fail(w, err, 400)
 		return
 	}
-	resp, err := pc.Open(r.Context(), q.Get("share"), q.Get("path"))
+	inline := q.Get("inline") == "1"
+	thumb, _ := strconv.Atoi(q.Get("thumb"))
+	name := path.Base(q.Get("path"))
+	rangeHdr := ""
+	if inline {
+		rangeHdr = r.Header.Get("Range")
+	}
+	resp, err := pc.OpenRaw(r.Context(), q.Get("share"), q.Get("path"), rangeHdr, inline || thumb > 0, thumb)
 	if err != nil {
 		fail(w, err, 502)
 		return
 	}
 	defer resp.Body.Close()
-	for _, h := range []string{"Content-Type", "Content-Length", "Content-Disposition"} {
-		if v := resp.Header.Get(h); v != "" {
-			w.Header().Set(h, v)
+	h := w.Header()
+	for _, k := range []string{"Content-Type", "Content-Length", "Content-Disposition", "Content-Range", "Accept-Ranges", "Last-Modified", "Cache-Control"} {
+		if v := resp.Header.Get(k); v != "" {
+			h.Set(k, v)
 		}
 	}
-	if w.Header().Get("Content-Disposition") == "" {
-		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(q.Get("path"))}))
+	if thumb > 0 {
+		h.Set("Content-Type", "image/jpeg")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+		return
+	}
+	if inline {
+		previewHeaders(h, name)
+		w.WriteHeader(resp.StatusCode)
+		copyBuf(w, resp.Body)
+		return
+	}
+	if h.Get("Content-Disposition") == "" {
+		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	}
 	pname, _ := d.Cfg.Trusted(pc.fp)
-	t := d.transfers.Start("download", pname.Name, path.Base(q.Get("path")), resp.ContentLength)
+	t := d.transfers.Start("download", pname.Name, name, resp.ContentLength)
 	t.Dest = "(browser)"
 	_, err = copyBuf(&countingWriter{w, t}, resp.Body)
 	d.transfers.Finish(t, err)

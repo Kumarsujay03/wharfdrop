@@ -210,12 +210,24 @@ func (d *Daemon) hGet(w http.ResponseWriter, r *http.Request, p *config.Peer) {
 		d.transfers.Finish(t, err)
 		return
 	}
+	q := r.URL.Query()
+	if n, _ := strconv.Atoi(q.Get("thumb")); n > 0 {
+		if !writeThumb(w, full, n) {
+			http.Error(w, "no thumbnail for this file", http.StatusUnsupportedMediaType)
+		}
+		return
+	}
 	f, err := os.Open(full)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	defer f.Close()
+	if q.Get("preview") == "1" {
+		// Previews (video seeking, images, text) are not listed as transfers.
+		http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+		return
+	}
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": info.Name()}))
 	t := d.transfers.Start("send", p.Name, info.Name(), info.Size())
 	// ServeContent gives us Range support for resumable downloads.

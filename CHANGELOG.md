@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-18
+
+### Added
+- **Previews while browsing.** Click a file to open it in a built-in viewer: photos, videos
+  (with seeking), audio, PDFs and text files. Use the arrow keys or buttons to move through
+  the folder.
+- **Grid and list views** for shared folders, with photo thumbnails made on the sharing device.
+- A back button and compact folder path on small screens.
+- Banner and screenshots in the README.
+
+### Security
+- Previews are served with a sandboxing Content-Security-Policy and `nosniff`. HTML, SVG,
+  scripts and other active content are always shown as plain text, so a shared file can never
+  run code in the Wharfdrop page.
+
 ## [0.2.2] - 2026-10-18
 
 ### Changed
@@ -65,6 +80,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.3.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.3.0
 [0.2.2]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.2
 [0.2.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.0
