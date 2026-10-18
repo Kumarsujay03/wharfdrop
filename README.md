@@ -1,21 +1,54 @@
+<p align="center">
+  <img src="docs/images/banner.jpg" alt="Wharfdrop: share files between your own devices, fast and private" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/Kumarsujay03/wharfdrop/actions/workflows/ci.yml"><img src="https://github.com/Kumarsujay03/wharfdrop/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Kumarsujay03/wharfdrop/releases/latest"><img src="https://img.shields.io/github/v/release/Kumarsujay03/wharfdrop?color=0d9488" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0d9488.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-0891b2" alt="Linux, Windows, macOS">
+</p>
+
 # Wharfdrop
 
-[![CI](https://github.com/Kumarsujay03/wharfdrop/actions/workflows/ci.yml/badge.svg)](https://github.com/Kumarsujay03/wharfdrop/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Kumarsujay03/wharfdrop)](https://github.com/Kumarsujay03/wharfdrop/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+**Secure, fast file sharing between your own computers on the same Wi-Fi or network.**
+One small program for Linux, Windows and macOS. No accounts, no cloud, no internet needed.
 
-Secure, fast file sharing between your own devices on the same Wi-Fi/LAN.
-Linux, Windows and macOS. One static binary, no accounts, no cloud, no internet.
+Install it on two computers, pair them once with a 6-digit code, and then send files, share
+folders, and browse and preview each other's shared files from a clean web interface or the
+terminal.
 
-* **Find each other automatically** on the local network (UDP multicast). The Wi-Fi band
-  each device uses (2.4 / 5 / 6 GHz) does not matter as long as both are on the same router.
-* **Pair once, like Bluetooth**: a 6-digit code appears on both screens; confirm on both.
-* **Everything is encrypted** with TLS 1.3 and mutual certificate pinning. Only paired
-  devices can talk to each other; unpaired devices on the network get "not paired".
-* **Send** files or whole folders by drag-and-drop (web UI) or from the terminal.
-* **Share** a local folder (e.g. `D:\Videos`) read-only with one or all paired devices;
-  they browse it and download single files or whole folders (as zip).
-* **Web UI and CLI** talk to the same daemon. The web UI is bound to 127.0.0.1 only.
+## Features
+
+* **Finds your devices automatically** on the local network. It doesn't matter whether one is
+  on 2.4 GHz and the other on 5 or 6 GHz, as long as both use the same router.
+* **Pair once, like Bluetooth.** Both screens show the same 6-digit code and you confirm on both.
+* **Encrypted end to end** with TLS 1.3 and pinned device keys. Unpaired devices are refused.
+* **Send files and folders** by drag and drop, with live progress.
+* **Share folders read-only** with one paired device or all of them.
+* **Browse with previews.** Switch between grid and list view, see photo thumbnails, and open
+  photos, videos, audio, PDFs and text files in a built-in viewer. Download single files or
+  whole folders as a zip.
+* **Runs only when you want it.** Start it, use it, stop it. It never starts at login.
+* **Keeps itself up to date** with signed updates from this repository's releases.
+* **Web UI and CLI.** Everything in the interface can also be done from the terminal.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshot-grid.jpg" alt="Grid view with photo thumbnails"><br><sub><b>Browse</b> a shared folder in grid view with thumbnails</sub></td>
+    <td width="50%"><img src="docs/images/screenshot-viewer.jpg" alt="Built-in photo viewer"><br><sub><b>Preview</b> photos, videos, audio, PDFs and text</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshot-send.png" alt="Sending files with progress"><br><sub><b>Send</b> files and folders by drag and drop</sub></td>
+    <td><img src="docs/images/screenshot-pair.png" alt="Pairing with a 6-digit code"><br><sub><b>Pair</b> by confirming the same 6-digit code on both devices</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/screenshot-list.png" alt="List view of a shared folder"><br><sub><b>List view</b> with sizes and dates</sub></td>
+    <td><img src="docs/images/screenshot-shares.png" alt="Managing shared folders, light theme"><br><sub><b>Share folders</b> read-only, with light and dark themes</sub></td>
+  </tr>
+</table>
 
 ## Install
 
@@ -199,6 +232,8 @@ devices remember each other's last address.
   ` (1)`, ` (2)` suffixes rather than being overwritten.
 * The loopback API needs a random per-install token, so other local processes or web pages
   cannot drive the daemon.
+* Previews are sandboxed. HTML, SVG, scripts and other active content are always shown as
+  plain text, so a file shared by another device can never run code in your Wharfdrop page.
 
 ## Speed
 
@@ -208,6 +243,20 @@ software (loopback runs at >1 GB/s). On Wi-Fi, two clients on the same access po
 *through* the AP, so expect roughly half of the slower device's link rate. A device on
 2.4 GHz caps the pair at a few MB/s to ~10 MB/s; two 5 GHz Wi-Fi 6 devices reach
 30-80 MB/s. Plugging either machine into the router by Ethernet helps a lot.
+
+## FAQ
+
+**Does it work on phones?**
+Not yet. Wharfdrop runs on Linux, Windows and macOS computers. Its web interface only opens
+on the computer that runs it, so a phone cannot use it today. Phone support is on the roadmap.
+
+**Is anything sent over the internet?**
+No. Devices talk directly over your local network. The only internet access is the optional
+update check against this repository's releases, which you can turn off in Settings.
+
+**Why can't my devices see each other?**
+Usually a firewall blocks UDP port 47070, or the router keeps Wi-Fi clients apart
+("AP isolation"). See [Firewall](#firewall), or pair by IP address with the **+** button.
 
 ## Contributing
 
