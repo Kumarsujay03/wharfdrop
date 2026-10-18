@@ -39,8 +39,11 @@ func phoneCmd(dir string, args []string) {
 		}
 	case "":
 		var out struct {
-			URL  string   `json:"url"`
-			Alts []string `json:"alts"`
+			URL      string   `json:"url"`
+			Alts     []string `json:"alts"`
+			Firewall *struct {
+				Text, Command string
+			} `json:"firewall"`
 		}
 		c.post("/api/phone/start", nil, &out)
 		fmt.Println("Scan this with your phone's camera (same Wi-Fi as this computer):")
@@ -49,6 +52,12 @@ func phoneCmd(dir string, args []string) {
 		fmt.Println()
 		fmt.Println("Or open this address on the phone:")
 		fmt.Println("  " + out.URL)
+		if out.Firewall != nil {
+			fmt.Println("\nIf the phone stays on a blank page: " + out.Firewall.Text)
+			if out.Firewall.Command != "" {
+				fmt.Println("  " + out.Firewall.Command)
+			}
+		}
 		fmt.Println("\nThe phone link closes after 10 minutes without activity. Close it now with: wharfdrop phone stop")
 	default:
 		die("usage: wharfdrop phone [stop|list]")

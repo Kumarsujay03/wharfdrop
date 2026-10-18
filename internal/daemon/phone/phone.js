@@ -350,6 +350,7 @@ window.addEventListener('beforeunload', e => { if (uploads.some(u => u.state ===
   if (!KEY || KEY.length !== 32) { gate('This link is not valid', 'Scan the QR code shown in Wharfdrop on your computer again.'); return; }
   SID = s.sid; KEYTEXT = s.key;
   try { REMEMBER = !!JSON.parse(localStorage.getItem(STORE) || 'null'); } catch { }
+  $('#gate').classList.add('hidden');
   $('#app').classList.remove('hidden');
   setStatus('Connecting…', false);
   try {

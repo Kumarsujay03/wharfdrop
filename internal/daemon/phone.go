@@ -873,7 +873,8 @@ func (d *Daemon) lPhoneStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"url": url, "alts": alts,
-		"qr": "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), "state": d.phones.State()})
+		"qr": "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), "state": d.phones.State(),
+		"firewall": firewallHint(d.phones.port)})
 }
 
 func (d *Daemon) lPhoneStop(w http.ResponseWriter, r *http.Request) {
