@@ -72,6 +72,8 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}
 .dot.on{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
 .top .spacer{flex:1}
+.phonepill{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft)}
+@media (max-width:720px){ .phonepill{display:none} }
 .top>*{flex-shrink:0}.top .me{flex-shrink:1}
 
 /* shell */
@@ -88,6 +90,8 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .avatar{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-weight:650;font-size:15px;color:#fff;flex:none;position:relative}
 .av-img{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;object-fit:cover}
 .me .avatar{width:24px;height:24px;border-radius:50%;font-size:10px;margin-left:-4px}
+.avatar.phav{background:var(--surface-2);color:var(--accent)}
+.avatar.phav .i{width:20px;height:20px}
 .avatar .st{position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;border:2px solid var(--surface);background:var(--faint)}
 .avatar .st.on{background:var(--ok)}
 .side-empty{padding:10px 10px 16px;font-size:14px;display:flex;gap:8px;align-items:center;color:var(--muted)}
@@ -203,6 +207,9 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .dialog p{color:var(--muted);font-size:14.5px}
 .dialog .acts{display:flex;justify-content:flex-end;gap:10px;margin-top:26px}
 .dialog .ico{width:50px;height:50px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center}
+.qrdlg{max-width:440px}
+.qrbox{margin:16px auto 12px;width:248px;height:248px;padding:10px;border-radius:16px;background:#fff;display:grid;place-items:center}
+.qrbox img{width:100%;height:100%;image-rendering:pixelated}
 .code{display:flex;justify-content:center;gap:8px;margin:18px 0 6px}
 .code span{width:50px;height:62px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);display:grid;place-items:center;font:650 30px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 @keyframes fade{from{opacity:0}}
@@ -326,6 +333,7 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
       <div class="side-h">Devices <button class="btn ghost icon sm" data-act="addip" title="Add a device by IP address" id="addbtn"></button></div>
       <div id="devlist"></div>
       <div id="nearby"></div>
+      <div id="phonelist"></div>
     </div>
     <nav class="nav" id="nav"></nav>
   </aside>
@@ -371,6 +379,8 @@ const P = {
   check:'<path d="M20 6 9 17l-5-5"/>',
   alert:'<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
   sparkle:'<path d="M12 3v3"/><path d="M12 18v3"/><path d="m4.9 4.9 2.1 2.1"/><path d="m17 17 2.1 2.1"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="m4.9 19.1 2.1-2.1"/><path d="m17 7 2.1-2.1"/>',
+  phone:'<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+  qr:'<rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>',
   grid:'<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
   list:'<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
   play:'<polygon points="6 3 20 12 6 21 6 3"/>',
@@ -437,7 +447,7 @@ const seenDone = new Set();
 const ui = {
   view:'device', sel:null, tab:'files', dialog:null, addip:false,
   browse:{fp:null, shares:null, share:null, path:'', items:null, error:null, loading:false},
-  upload:null, viewer:null,
+  upload:null, viewer:null, qr:null, phone:null,
   layout:(()=>{ try{ return localStorage.getItem('wd-layout')||'list'; }catch{ return 'list'; } })(),
 };
 const peerByFP = fp => (S?.peers||[]).find(p=>p.fp===fp);
@@ -450,6 +460,11 @@ async function refresh(){
   catch(e){ setHTML($('#me'), `<span class="dot"></span><span>Not connected</span>`); return; }
   if(!ui.sel || !peerByFP(ui.sel)){ const t=trusted()[0] || nearby()[0]; ui.sel = t ? t.fp : null; if(ui.view==='device') renderMain(); }
   notifyReceived();
+  if(ui.qr){ const fresh=(S.phone.phones||[]).find(f=>f.online && !ui.qr.known.has(f.id));
+    if(fresh){ ui.qr=null; ui.view='phone'; ui.phone=fresh.id; toast(`${fresh.name||'Phone'} connected`); renderMain(); }
+    else if(!S.phone.running){ ui.qr=null; } }
+  if(ui.view==='phone' && !phoneByID(ui.phone)){ ui.view='device'; renderMain(); }
+  if(ui.view==='phone'){ const f=phoneByID(ui.phone); const k=f?`${f.online}|${S.phone.running}`:''; if(k!==ui.phoneKey){ ui.phoneKey=k; renderMain(); } }
   renderTop(); renderSide(); renderModal(); renderLive();
   if(firstLoad){ firstLoad=false; renderMain(); }
 }
@@ -471,7 +486,10 @@ function renderTop(){
   if(u.installing) h=`<span class="badge accent">${ic('refresh')} Updating…</span>`;
   else if(u.available) h=`<button class="btn sm primary" data-act="update">${ic('sparkle')} Update to ${esc(u.latest)}</button>`;
   else h=`<span class="badge ver" title="Wharfdrop version">${esc(u.current)}</span>`;
-  setHTML($('#updpill'), h);
+  const ph=S.phone;
+  if(ph&&ph.running){ const m=Math.max(1,Math.ceil(ph.idle_in/60));
+    h=`<button class="btn sm phonepill" data-act="phone-connect" title="Show the QR code again">${ic('phone')} Phone link open · closes in ${m} min</button><button class="btn sm ghost" data-act="phone-stop" title="Close the phone link">${ic('x')}</button>`+h; }
+  setHTML($('#updpill'), `<div class="inline" style="gap:6px;flex-wrap:nowrap">${h}</div>`);
 }
 
 function renderSide(){
@@ -485,6 +503,12 @@ function renderSide(){
       ${avatar(p)}<span class="meta"><span class="name ellipsis">${esc(p.name)}</span><span class="sub ellipsis">${esc(p.addr)}</span></span>
       <span class="badge accent">Pair</span>
     </button>`).join('') : (tr.length ? '' : `<div class="side-empty" style="padding-top:0">${ic('wifi')} Looking for devices on this network…</div>`));
+  const ph=S.phone||{phones:[]};
+  setHTML($('#phonelist'), `<div class="side-h" style="margin-top:14px">Phones <button class="btn ghost icon sm" data-act="phone-connect" title="Connect a phone">${ic('plus')}</button></div>` +
+    (ph.phones.length ? ph.phones.map(f=>`<button class="dev ${ui.view==='phone'&&ui.phone===f.id?'sel':''}" data-act="phone-select" data-id="${esc(f.id)}">
+      <span class="avatar phav">${ic('phone')}<span class="st ${f.online?'on':''}"></span></span>
+      <span class="meta"><span class="name ellipsis">${esc(f.name||'Phone')}</span><span class="sub ellipsis">${f.online?'Connected':(ph.running?'Not connected':'Phone link closed')}${f.remembered?' · remembered':''}</span></span></button>`).join('')
+     : `<button class="dev" data-act="phone-connect"><span class="avatar phav">${ic('qr')}</span><span class="meta"><span class="name">Connect a phone</span><span class="sub">Scan a QR code, no app needed</span></span></button>`));
   const active=S.transfers.filter(t=>!t.finished);
   let pct=0; if(active.length){ const d=active.reduce((a,t)=>a+t.done,0), s=active.reduce((a,t)=>a+(t.size>0?t.size:t.done),0); pct=s?d*100/s:0; }
   const nav=(v,icon,label,extra='')=>`<button class="${ui.view===v?'sel':''}" data-act="view" data-v="${v}">${ic(icon)}${label}${extra}</button>`;
@@ -508,6 +532,7 @@ function renderMain(){
   if(ui.view==='transfers') el.innerHTML = viewTransfers();
   else if(ui.view==='shares') el.innerHTML = viewShares();
   else if(ui.view==='settings') el.innerHTML = viewSettings();
+  else if(ui.view==='phone') el.innerHTML = viewPhone();
   else el.innerHTML = viewDevice();
   el._h=null;
   renderSide(); renderLive();
@@ -657,6 +682,34 @@ async function loadDir(){
 }
 function rerenderTab(){ const tb=$('#tabbody'); const p=peerByFP(ui.sel); if(tb&&p&&ui.tab==='files') tb.innerHTML=viewBrowse(p); }
 
+const phoneByID = id => (S?.phone?.phones||[]).find(f=>f.id===id);
+function viewPhone(){
+  const f=phoneByID(ui.phone);
+  if(!f) return `<div class="page"><div class="empty" style="padding-top:12vh"><div class="big">${ic('phone','i-lg')}</div><h3>Phone not found</h3></div></div>`;
+  const run=S.phone.running;
+  return `<div class="page">
+    <div class="page-h"><span class="avatar phav" style="width:58px;height:58px;border-radius:16px">${ic('phone','i-lg')}</span>
+      <div class="grow"><h1 class="ellipsis">${esc(f.name||'Phone')}</h1>
+        <div class="muted" style="font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
+          <span class="badge ${f.online?'ok':''}">${f.online?'Connected':'Not connected'}</span><span>Phone link · encrypted with the QR code key</span></div></div>
+      ${run?'':`<button class="btn sm primary" data-act="phone-connect">${ic('qr')} Open phone link</button>`}
+      <button class="btn ghost sm" data-act="phone-forget" data-id="${esc(f.id)}">Forget</button></div>
+    ${!run?`<div class="card card-b" style="margin-bottom:18px">The phone link is closed. ${f.remembered?'Open it and this phone can reconnect from its Wharfdrop page.':'Open it and scan the QR code with the phone.'}</div>`:''}
+    <div class="sendgrid">
+      <div class="sendmain">
+        <div class="drop" id="drop">
+          <div class="big">${ic('upload','i-lg')}</div>
+          <h3>Drop files to send to ${esc(f.name||'the phone')}</h3>
+          <div>They appear under <b>Receive</b> on the phone, ready to save.</div>
+          <div class="acts"><button class="btn primary" data-act="pick-files" ${f.online?'':'disabled'}>${ic('file')} Choose files</button></div>
+        </div>
+        <div id="upbar" class="upbar"></div>
+      </div>
+      <div class="card recent" style="margin-top:20px;overflow:hidden"><div class="card-h"><b>Waiting on the phone</b></div><div id="outbox" class="recent-list"></div>
+        <div class="card-h" style="border-top:1px solid var(--border)"><b>Recent with ${esc(f.name||'this phone')}</b></div><div id="recent" class="recent-list"></div></div>
+    </div></div>`;
+}
+
 function viewSend(p){
   return `<div class="sendgrid">
     <div class="sendmain">
@@ -732,7 +785,11 @@ function viewSettings(){
 function renderLive(){
   if(!S) return;
   const tl=$('#tlist'); if(tl) setHTML(tl, S.transfers.length ? S.transfers.slice(0,100).map(trRow).join('') : `<div class="empty"><div class="big">${ic('arrows','i-lg')}</div><h3>No transfers yet</h3><p>Files you send, receive or download appear here.</p></div>`);
-  const rc=$('#recent'); if(rc){ const p=peerByFP(ui.sel); const list=S.transfers.filter(t=>p&&t.peer===p.name).slice(0,8);
+  const ob=$('#outbox'); if(ob){ const f=phoneByID(ui.phone); const items=f?f.outbox:[];
+    setHTML(ob, items.length ? `<div class="rows">${items.map(o=>`<div class="tr"><span class="dir out">${ic('upload')}</span><div style="min-width:0"><div class="nm ellipsis">${esc(o.name)}</div><div class="info">${fmt(o.size)} · waiting for the phone to save it</div></div>
+      <div class="right"><button class="btn ghost icon sm danger" data-act="phone-unoffer" data-id="${esc(o.id)}" title="Stop offering">${ic('x')}</button></div></div>`).join('')}</div>`
+      : `<div class="empty" style="padding:18px"><p>Nothing waiting.</p></div>`); }
+  const rc=$('#recent'); if(rc){ const p=ui.view==='phone' ? {name:(phoneByID(ui.phone)||{}).name} : peerByFP(ui.sel); const list=S.transfers.filter(t=>p&&t.peer===p.name).slice(0,8);
     setHTML(rc, list.length ? `<div class="rows">${list.map(trRow).join('')}</div>` : `<div class="empty" style="padding:22px"><p>Nothing sent or received with this device yet.</p></div>`); }
   const sl=$('#slist'); if(sl){ const nm=fp=>fp==='*'?'All paired devices':(peerByFP(fp)?.name||fp.slice(0,8));
     setHTML(sl, S.shares.length ? `<div class="rows">${S.shares.map((s,i)=>`<div class="tr"><span class="ficon folder">${ic('folder')}</span>
@@ -768,6 +825,16 @@ function renderModal(){
     setHTML(m, `<div class="modal"><div class="dialog" role="dialog" aria-modal="true"><div class="ico">${ic('shield','i-lg')}</div>
       <h2>Pairing with ${esc(out.peer_name)}</h2><p>${out.local_confirmed?`Waiting for ${esc(out.peer_name)} to tap Allow…`:`Check that ${esc(out.peer_name)} shows the same code.`}</p>${code(out.code)}
       <div class="acts"><button class="btn" data-act="pcancel" data-id="${out.id}">Cancel</button>${out.local_confirmed?'':`<button class="btn primary" data-act="pconfirm" data-id="${out.id}">${ic('check')} Codes match</button>`}</div></div></div>`);
+  } else if(ui.qr){
+    const q=ui.qr;
+    setHTML(m, `<div class="modal" data-act="qr-bg"><div class="dialog qrdlg" role="dialog" aria-modal="true">
+      <div class="ico">${ic('phone','i-lg')}</div><h2>Connect a phone</h2>
+      <p>Scan this code with your phone's camera. The phone must be on the same Wi-Fi as this computer. No app is needed.</p>
+      <div class="qrbox"><img src="${q.qr}" alt="QR code for the phone link"></div>
+      <details class="muted" style="font-size:13px"><summary>Can't scan? Type this address on the phone</summary><div class="mono" style="word-break:break-all;margin-top:6px">${esc(q.url)}</div>
+        ${(q.alts||[]).length?`<div style="margin-top:6px">Other addresses of this computer: ${q.alts.map(a=>`<div class="mono" style="word-break:break-all">${esc(a)}</div>`).join('')}</div>`:''}</details>
+      <p style="font-size:13px;margin-top:10px">Everything is encrypted with a key inside this QR code. The phone link closes after 10 minutes without activity.</p>
+      <div class="acts"><button class="btn" data-act="phone-stop">Close phone link</button><button class="btn primary" data-act="qr-close">Done</button></div></div></div>`);
   } else if(ui.addip){
     setHTML(m, `<div class="modal" data-act="addip-bg"><div class="dialog" role="dialog" aria-modal="true"><div class="ico">${ic('wifi','i-lg')}</div>
       <h2>Add a device by IP address</h2><p>Use this if a device does not appear automatically. Its address is shown at the top of Wharfdrop on that device.</p>
@@ -778,7 +845,9 @@ function renderModal(){
 }
 
 // ---------- sending ----------
-function sendTarget(){ const p=peerByFP(ui.sel); return ui.view==='device'&&p&&p.trusted ? p : null; }
+function sendTarget(){
+  if(ui.view==='phone'){ const f=phoneByID(ui.phone); return f&&f.online ? {phone:true, fp:f.id, name:f.name||'phone'} : null; }
+  const p=peerByFP(ui.sel); return ui.view==='device'&&p&&p.trusted ? p : null; }
 async function collect(dt){
   const out=[], entries=[...(dt.items||[])].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
   if(!entries.length){ for(const f of dt.files) out.push({file:f, rel:f.name}); return out; }
@@ -843,7 +912,7 @@ async function send(files){
   if(ui.upload){ toast('Please wait for the current send to finish.','err'); return; }
   const total=files.reduce((a,f)=>a+f.file.size,0);
   ui.upload={peer:p.name, count:files.length, loaded:0, total, rate:0}; uploadCancelled=false; renderLive();
-  const big=files.filter(f=>f.file.size>=PARALLEL_MIN), small=files.filter(f=>f.file.size<PARALLEL_MIN);
+  const big=p.phone?[]:files.filter(f=>f.file.size>=PARALLEL_MIN), small=p.phone?files:files.filter(f=>f.file.size<PARALLEL_MIN);
   let done=0;
   try{
     for(const {file,rel} of big){
@@ -855,9 +924,9 @@ async function send(files){
       ui.upload.current = small.length===1 ? small[0].rel : `${small.length} smaller files`;
       const fd=new FormData(); for(const {file,rel} of small) fd.append('file', file, rel);
       const smallTotal=small.reduce((a,f)=>a+f.file.size,0), base=done;
-      await xhrSend('POST','/api/send?peer='+encodeURIComponent(p.fp), fd, n=>{ ui.upload.loaded=base+Math.min(n,smallTotal); trackRate(); renderLive(); });
+      await xhrSend('POST',(p.phone?'/api/phone/send?phone=':'/api/send?peer=')+encodeURIComponent(p.fp), fd, n=>{ ui.upload.loaded=base+Math.min(n,smallTotal); trackRate(); renderLive(); });
     }
-    toast(`Sent ${files.length} item${files.length>1?'s':''} to ${p.name}`);
+    toast(p.phone ? `Sent to ${p.name}. Tap Save on the phone to keep ${files.length>1?'them':'it'}.` : `Sent ${files.length} item${files.length>1?'s':''} to ${p.name}`);
   }catch(e){ toast(uploadCancelled?'Send cancelled':'Send failed: '+e.message, uploadCancelled?'':'err'); }
   ui.upload=null; renderLive(); refresh();
 }
@@ -874,7 +943,7 @@ window.addEventListener('dragenter', e=>{ if(![...(e.dataTransfer?.types||[])].i
 window.addEventListener('dragover', e=>{ if([...(e.dataTransfer?.types||[])].includes('Files')) e.preventDefault(); });
 window.addEventListener('dragleave', e=>{ if(--dragDepth<=0){ dragDepth=0; $('#overlay').classList.remove('on'); $('#drop')?.classList.remove('over'); } });
 window.addEventListener('drop', async e=>{ e.preventDefault(); dragDepth=0; $('#overlay').classList.remove('on'); $('#drop')?.classList.remove('over');
-  if(!sendTarget()){ toast('Select a paired device first.','err'); return; } send(await collect(e.dataTransfer)); });
+  if(!sendTarget()){ toast(ui.view==='phone'?'The phone is not connected.':'Select a paired device first.','err'); return; } send(await collect(e.dataTransfer)); });
 
 // ---------- actions ----------
 const ACT = {
@@ -893,6 +962,17 @@ const ACT = {
   'cancel-upload': () => { uploadCancelled=true; for(const x of uploadXHRs) x.abort(); },
   'pick-avatar': () => $('#avin').click(),
   'remove-avatar': async () => { await api('/api/avatar',{method:'DELETE'}); await refresh(); renderMain(); toast('Profile picture removed'); },
+  'phone-connect': async () => {
+    try{ const r=await post('/api/phone/start'); ui.qr={qr:r.qr,url:r.url,alts:r.alts, known:new Set((S.phone.phones||[]).filter(f=>f.online).map(f=>f.id))}; renderModal(); await refresh(); }
+    catch(e){ toast(e.message,'err'); } },
+  'phone-stop': async () => { ui.qr=null; renderModal(); await post('/api/phone/stop'); await refresh(); toast('Phone link closed'); },
+  'qr-close': () => { ui.qr=null; renderModal(); },
+  'qr-bg': (d,e) => { if(e.target.classList.contains('modal')){ ui.qr=null; renderModal(); } },
+  'phone-select': d => { ui.view='phone'; ui.phone=d.id; renderMain(); },
+  'phone-unoffer': async d => { await post('/api/phone/unoffer',{phone:ui.phone,id:d.id}); refresh(); },
+  'phone-forget': async d => { const f=phoneByID(d.id);
+    if(!await ask({title:`Forget ${f?.name||'this phone'}?`, text:'It will need to scan a new QR code to connect again.', ok:'Forget', danger:true})) return;
+    await post('/api/phone/forget',{id:d.id}); ui.view='device'; await refresh(); renderMain(); },
   reload: () => { if(ui.browse.share) loadDir(); else loadShares(); },
   'pick-files': () => $('#fi').click(),
   'pick-folder': () => $('#di').click(),

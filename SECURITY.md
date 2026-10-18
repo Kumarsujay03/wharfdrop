@@ -36,6 +36,12 @@ Wharfdrop is designed for devices you own on a network you mostly trust, such as
 - A tampered or substituted update (updates must carry a valid Ed25519 signature from the
   release key and match the signed checksum).
 
+- Reading or faking phone-link traffic without the QR code. Every request, response and file
+  chunk is sealed with XChaCha20-Poly1305 using a 256-bit key that only travels inside the QR
+  code (in the URL fragment, which browsers never send). Messages are bound to their purpose,
+  upload and position, requests carry a timestamp and are refused if replayed, download links
+  work once, and repeated failures from one address are rate-limited.
+
 **Out of scope**
 
 - A paired device that is itself compromised. Pairing means trust: a paired device can send
@@ -43,4 +49,9 @@ Wharfdrop is designed for devices you own on a network you mostly trust, such as
 - Malware on the same machine running as your user. It can read the private key and token.
 - Users who accept a pairing without comparing the code.
 - Denial of service from devices on the same LAN.
+- Active tampering on the local network while a phone first loads the phone page. The page is
+  served over plain HTTP (phone browsers offer no usable alternative without an app), so an
+  attacker who can rewrite your home network's traffic at that moment could alter it. Use the
+  phone link on networks you trust, and close it when you are done.
+- Anyone who sees or photographs the QR code while the phone link is open.
 - Theft of the release signing key itself (held by the maintainer and as a GitHub Actions secret).

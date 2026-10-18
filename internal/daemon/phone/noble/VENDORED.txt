@@ -1,0 +1,3 @@
+Vendored from @noble/ciphers 2.4.0 (MIT, https://github.com/paulmillr/noble-ciphers).
+npm integrity: sha512-AnjFn0Jv92laAkvMrghlFZq4qQCIN/4DxFV/eooqtC2YTjB7kBeLMS2T9KJX4Dn+ZVXLOwK0lSgqDtx9gvxtiw==
+Files: chacha.js _arx.js _poly1305.js utils.js (unmodified).

@@ -32,6 +32,9 @@ terminal.
   whole folders as a zip.
 * **Runs only when you want it.** Start it, use it, stop it. It never starts at login.
 * **Keeps itself up to date** with signed updates from this repository's releases.
+* **Phones too, with no app.** Scan a QR code and the phone's browser can send photos and
+  files to the computer, save files the computer sends, and browse shared folders. Everything
+  is end-to-end encrypted with a key inside the QR code.
 * **Profile pictures** so your paired devices are easy to tell apart.
 * **Web UI and CLI.** Everything in the interface can also be done from the terminal.
 
@@ -47,7 +50,7 @@ terminal.
     <td><img src="docs/images/screenshot-pair.png" alt="Pairing with a 6-digit code"><br><sub><b>Pair</b> by confirming the same 6-digit code on both devices</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/screenshot-list.png" alt="List view of a shared folder"><br><sub><b>List view</b> with sizes and dates</sub></td>
+    <td><img src="docs/images/screenshot-phone.jpg" alt="Phone page: send, receive and browse"><br><sub><b>Phones</b> connect by QR code: send, receive and browse in the browser</sub></td>
     <td><img src="docs/images/screenshot-shares.png" alt="Managing shared folders, light theme"><br><sub><b>Share folders</b> read-only, with light and dark themes</sub></td>
   </tr>
 </table>
@@ -92,7 +95,8 @@ All release files, including Linux/macOS/Windows on ARM, are on the
 
 ### Build from source
 
-You need [Go 1.22 or newer](https://go.dev/dl/) and Git. There are no other dependencies.
+You need [Go 1.26 or newer](https://go.dev/dl/) and Git. Go fetches the two small dependencies
+(`golang.org/x/crypto` and `rsc.io/qr`) automatically.
 
 Windows (PowerShell, no `make` needed):
 
@@ -161,6 +165,42 @@ Incoming files land in `~/Wharfdrop` by default. Config, keys and the UI token a
 `~/.config/wharfdrop` (Linux) or `%AppData%\wharfdrop` (Windows). Set `WHARFDROP_DIR`
 to use another directory (handy for running two nodes on one machine while testing).
 
+## Phones
+
+Phones connect through their web browser, so there is nothing to install on the phone.
+
+1. On the computer, click **Connect a phone** in the sidebar (or run `wharfdrop phone`).
+2. Scan the QR code with the phone's camera. The phone must be on the same Wi-Fi.
+3. The phone opens Wharfdrop in its browser:
+   * **Send** photos, videos and files to the computer. They land in the received-files folder.
+   * **Receive** files the computer sends. Select the phone on the computer, drop files, then tap
+     **Save** on the phone.
+   * **Browse** folders the computer shares with all paired devices, with photo thumbnails.
+
+Tick **Remember this phone** in the phone's menu to reconnect later without scanning, while the
+phone link is open. The phone link closes after 10 minutes without activity, when you click
+the close button, or when Wharfdrop stops.
+
+From the terminal:
+
+```bash
+wharfdrop phone                     # open the phone link and show the QR code
+wharfdrop phone list                # phones and whether they are connected
+wharfdrop send "Sujay's iPhone" holiday.mp4
+wharfdrop phone stop
+```
+
+**How phones stay secure.** Phone browsers block their built-in encryption on local `http://`
+pages, and a self-signed HTTPS certificate only teaches people to click through warnings. So the
+QR code carries a random 256-bit key in the part of the link browsers never send, and every
+request, response and file chunk is encrypted with XChaCha20-Poly1305 inside the page. A device
+on the same Wi-Fi without the QR code can neither read nor fake anything. See
+[SECURITY.md](SECURITY.md) for the remaining limit.
+
+**Limits.** Saving very large files on the phone (over about 1 GB) may fail, because the phone's
+browser holds them in memory while decrypting. Sending from the phone has no such limit. Only
+single files can be sent to phones, not folders.
+
 ## Updates
 
 Wharfdrop keeps itself up to date from this repository's
@@ -193,17 +233,18 @@ itself.
 
 ## Firewall
 
-The daemon needs two inbound ports open on the LAN:
+Wharfdrop needs these inbound ports open on the local network:
 
 | Port | Protocol | Purpose |
 |---|---|---|
 | 47070 | UDP | discovery beacons (multicast 239.255.70.70) |
 | 48080 | TCP | peer API (TLS) |
+| 48082 | TCP | phone link, only while it is open |
 
 Ubuntu with ufw:
 
 ```bash
-sudo ufw allow 47070/udp && sudo ufw allow 48080/tcp
+sudo ufw allow 47070/udp && sudo ufw allow 48080/tcp && sudo ufw allow 48082/tcp
 ```
 
 Windows: accept the Defender Firewall prompt on first run for *private* networks, or
@@ -277,8 +318,8 @@ $env:WHARFDROP_UNINSTALL=1; irm https://raw.githubusercontent.com/Kumarsujay03/w
 ## FAQ
 
 **Does it work on phones?**
-Not yet. Wharfdrop runs on Linux, Windows and macOS computers. Its web interface only opens
-on the computer that runs it, so a phone cannot use it today. Phone support is on the roadmap.
+Yes, through the phone's browser. See [Phones](#phones). Wharfdrop itself runs on Linux,
+Windows and macOS computers; the phone connects to one of them.
 
 **Does installing put the source code on my computer?**
 No. The installers and the release downloads contain only the single `wharfdrop` program file.
@@ -311,6 +352,7 @@ internal/identity     keys, certificate, fingerprints, pairing code
 internal/config       config.json: name, ports, trusted peers, shares
 internal/discovery    multicast beacons
 internal/daemon       peer API (mTLS), pairing, transfers, loopback API, web UI (ui.html)
+internal/daemon/phone phone page (HTML/JS) and vendored noble-ciphers
 internal/update       signed self-updater
 tools/release-sign    signs release checksums in CI
 ```
