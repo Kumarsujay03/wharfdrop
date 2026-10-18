@@ -75,6 +75,23 @@ jobs:
           Start-Sleep 1
           if (Get-Process wharfdrop -ErrorAction SilentlyContinue) { throw "still running after stop" }
           Write-Host "smoke test passed"
+      - name: Uninstall keeps received files
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'uninst'
+          New-Item -ItemType Directory -Force "$dir\bin", "$dir\cfg", "$dir\received" | Out-Null
+          Copy-Item .\bin\wharfdrop.exe "$dir\bin\wharfdrop.exe"
+          Set-Content "$dir\received\movie.txt" 'keep me'
+          '{"name":"ci","peer_port":48880,"ui_port":48881,"incoming_dir":"' + ("$dir\received" -replace '\\','\\') + '","auto_update":"off"}' | Set-Content "$dir\cfg\config.json"
+          $env:WHARFDROP_DIR = "$dir\cfg"
+          & "$dir\bin\wharfdrop.exe" start; if ($LASTEXITCODE) { throw "start failed" }
+          & "$dir\bin\wharfdrop.exe" uninstall --yes; if ($LASTEXITCODE) { throw "uninstall failed" }
+          Start-Sleep 6
+          if (Test-Path "$dir\cfg") { throw "settings folder still exists" }
+          if (Test-Path "$dir\bin\wharfdrop.exe") { throw "program file still exists" }
+          if ((Get-Content "$dir\received\movie.txt") -ne 'keep me') { throw "received file was touched" }
+          if (Get-Process wharfdrop -ErrorAction SilentlyContinue) { throw "still running" }
+          Write-Host "uninstall test passed"
       - name: Installer on Windows PowerShell 5.1
         shell: powershell
         env:

@@ -86,6 +86,8 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .dev .name{font-weight:550;display:flex;align-items:center;gap:6px}
 .dev .sub{font-size:13px;color:var(--muted)}
 .avatar{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-weight:650;font-size:15px;color:#fff;flex:none;position:relative}
+.av-img{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;object-fit:cover}
+.me .avatar{width:24px;height:24px;border-radius:50%;font-size:10px;margin-left:-4px}
 .avatar .st{position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;border:2px solid var(--surface);background:var(--faint)}
 .avatar .st.on{background:var(--ok)}
 .side-empty{padding:10px 10px 16px;font-size:14px;display:flex;gap:8px;align-items:center;color:var(--muted)}
@@ -95,12 +97,14 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .nav button.sel{background:var(--accent-soft);color:var(--accent)}
 .nav .count{margin-left:auto}
 .mini-progress{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin:2px 10px 4px}
+.mini-speed{display:flex;align-items:center;gap:6px;margin:0 12px 6px;font-size:12.5px;color:var(--accent);font-variant-numeric:tabular-nums}
+.mini-speed .i{width:13px;height:13px}
 .mini-progress i{display:block;height:100%;background:var(--grad);transition:width .4s}
 
 /* main */
 .main{overflow:auto;min-width:0;min-height:0;background:var(--glow)}
-.page{max-width:1120px;margin:0 auto;padding:34px 40px 56px}
-.page-h{display:flex;align-items:center;gap:18px;margin-bottom:26px}
+.page{max-width:1120px;margin:0 auto;padding:clamp(18px,3.4vh,34px) clamp(16px,3vw,40px) clamp(20px,4vh,48px)}
+.page-h{display:flex;align-items:center;gap:18px;margin-bottom:clamp(14px,2.6vh,26px)}
 .page-h h1{font-size:24px;line-height:1.25;font-weight:650;letter-spacing:-.015em}
 .page-h .avatar{width:58px;height:58px;border-radius:16px;font-size:21px}
 .page-h .grow{flex:1;min-width:0}
@@ -144,7 +148,7 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .empty p{max-width:460px;font-size:14.5px}
 
 /* send */
-.drop{display:flex;flex-direction:column;align-items:center;gap:12px;padding:64px 24px;border:2px dashed var(--border-strong);border-radius:var(--r);text-align:center;color:var(--muted);transition:.15s;background:var(--surface)}
+.drop{display:flex;flex-direction:column;align-items:center;gap:12px;padding:clamp(24px,6.5vh,64px) 24px;border:2px dashed var(--border-strong);border-radius:var(--r);text-align:center;color:var(--muted);transition:.15s;background:var(--surface)}
 .drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
 .drop .big{width:72px;height:72px;border-radius:20px;background:var(--grad);color:var(--accent-fg);box-shadow:0 8px 24px var(--accent-ring);display:grid;place-items:center}
 .drop h3{font-size:19px;color:var(--text);font-weight:600}
@@ -159,10 +163,18 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .rows .tr:first-child{border-top:0}
 .tr .nm{font-weight:550}
 .tr .info{font-size:13.5px;color:var(--muted);margin-top:1px}
+.tr .live{color:var(--accent);font-weight:600}
+.recent .tr{grid-template-columns:40px minmax(0,1fr);row-gap:6px}
+.recent .tr .right{grid-column:2;justify-content:flex-start;flex-wrap:wrap;font-size:13px}
 .tr .right{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .bar{height:6px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:7px}
 .bar i{display:block;height:100%;background:var(--grad);transition:width .4s}
 .bar i.done{background:var(--ok)}.bar i.err{background:var(--danger)}
+.upcard{display:flex;flex-direction:column;gap:10px}
+.uprow{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px;min-width:0}
+.upstats{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.upstats .live{color:var(--accent);font-weight:600}
+.bar.big{height:8px;margin-top:0}
 .dir{width:36px;height:36px;border-radius:10px;display:grid;place-items:center}
 .dir.in{background:var(--ok-soft);color:var(--ok)}.dir.out{background:var(--accent-soft);color:var(--accent)}.dir.err{background:var(--danger-soft);color:var(--danger)}
 
@@ -176,6 +188,11 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 .seg{display:inline-flex;padding:4px;border-radius:11px;background:var(--surface-2);gap:2px}
 .seg button{border:0;background:none;padding:8px 16px;border-radius:8px;cursor:pointer;color:var(--muted);font-weight:550;font-size:14px}
 .seg button.sel{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.idrow{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.idrow form{flex:1;min-width:220px;flex-wrap:nowrap}
+.avset{display:flex;align-items:center;gap:12px}
+.avbtns{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.avset .avatar.big{width:60px;height:60px;border-radius:50%;font-size:21px}
 .kv{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px 14px;font-size:14px}
 .kv dt{color:var(--muted)}
 
@@ -231,6 +248,28 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 
 .stopped{flex:1;display:grid;place-items:center;padding:20px}
 
+@media (max-height:820px) and (min-width:721px){
+  .top{height:58px}
+  .page-h .avatar{width:48px;height:48px;border-radius:14px;font-size:18px}
+  .page-h h1{font-size:22px}
+  .tabs{margin-bottom:14px}.tab{height:42px}
+  .drop .big{width:58px;height:58px;border-radius:16px}
+  .drop h3{font-size:17.5px}
+  .empty{padding:34px 20px}
+  .set{padding:15px 22px}
+  .page{padding-bottom:14px}
+  .kv{gap:6px 14px}
+  .set p{margin-top:2px}
+  .side-scroll{padding:14px 12px}
+  .nav{padding:8px 12px 10px}.nav button{height:40px}
+  .card-h{min-height:54px;padding:10px 16px}
+  .row{height:50px}
+}
+@media (min-width:1180px){
+  .sendgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start}
+  .sendgrid .recent{margin-top:0 !important}
+  .recent-list{max-height:calc(100vh - 330px);overflow:auto}
+}
 @media (max-width:860px){
   .grid-form{grid-template-columns:1fr 1fr}
   .grid-form .btn{grid-column:1/-1}
@@ -298,6 +337,7 @@ label.field{display:flex;flex-direction:column;gap:7px;font-size:13.5px;font-wei
 <div class="toasts" id="toasts"></div>
 <input type="file" id="fi" multiple hidden>
 <input type="file" id="di" webkitdirectory hidden>
+<input type="file" id="avin" accept="image/png,image/jpeg,image/gif" hidden>
 
 <script>
 "use strict";
@@ -343,12 +383,18 @@ const ic = (n, cls='') => `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none"
 // ---------- helpers ----------
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function fmt(n){ if(n==null||n<0) return '—'; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return (i?n.toFixed(n<10?1:0):n)+' '+u[i]; }
+function fmtDur(sec){ if(!isFinite(sec)||sec<=0) return ''; sec=Math.round(sec); if(sec<60) return sec+' s'; const m=Math.round(sec/60); if(m<60) return m+' min'; return Math.floor(m/60)+' h '+(m%60)+' min'; }
+const rateTxt = r => r>0 ? fmt(r)+'/s' : '';
 function ago(d){ const t=new Date(d); if(isNaN(t)||t.getFullYear()<2000) return ''; return t.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}); }
 function hue(s){ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))%360; return h; }
 function initials(n){ const p=String(n||'?').split(/[\s\-_.]+/).filter(Boolean); return ((p[0]||'?')[0]+(p[1]?p[1][0]:(p[0]||'')[1]||'')).toUpperCase(); }
 const AV=['linear-gradient(135deg,#0d9488,#0891b2)','linear-gradient(135deg,#7c3aed,#c026d3)','linear-gradient(135deg,#ea580c,#e11d48)','linear-gradient(135deg,#2563eb,#0891b2)','linear-gradient(135deg,#16a34a,#0d9488)','linear-gradient(135deg,#db2777,#9333ea)','linear-gradient(135deg,#ca8a04,#ea580c)','linear-gradient(135deg,#475569,#1e293b)'];
 const avBg = fp => AV[hue(fp)%AV.length];
-const avatar = (p, big) => `<span class="avatar" style="background:${avBg(p.fp)}">${esc(initials(p.name))}${big?'':`<span class="st ${p.online?'on':''}"></span>`}</span>`;
+const avBucket = () => Math.floor(Date.now()/300000);
+const peerAvURL = fp => `/api/peer/avatar?peer=${encodeURIComponent(fp)}&t=${encodeURIComponent(T)}&v=${avBucket()}`;
+const avImg = src => `<img class="av-img" alt="" src="${src}" onerror="this.remove()">`;
+const avatar = (p, big) => `<span class="avatar" style="background:${avBg(p.fp)}">${esc(initials(p.name))}${p.trusted?avImg(peerAvURL(p.fp)):''}${big?'':`<span class="st ${p.online?'on':''}"></span>`}</span>`;
+const selfAvatar = (cls='') => { const m=S.self; return `<span class="avatar ${cls}" style="background:${avBg(m.fp)}">${esc(initials(m.name))}${m.avatar?avImg(`/api/avatar?t=${encodeURIComponent(T)}&v=${m.avatar}`):''}</span>`; };
 function kindIcon(name){
   const e=(name.split('.').pop()||'').toLowerCase();
   if(/^(jpe?g|png|gif|webp|bmp|heic|svg|tiff?|raw|avif)$/.test(e)) return 'image';
@@ -420,7 +466,7 @@ function notifyReceived(){
 // ---------- top bar & sidebar ----------
 function renderTop(){
   const m=S.self;
-  setHTML($('#me'), `<span class="dot on"></span><b>${esc(m.name)}</b><span class="addr">${esc((m.addrs[0]||'')+(m.addrs[0]?':'+m.port:''))}</span>`);
+  setHTML($('#me'), `${m.avatar?selfAvatar():'<span class="dot on"></span>'}<b>${esc(m.name)}</b><span class="addr">${esc((m.addrs[0]||'')+(m.addrs[0]?':'+m.port:''))}</span>`);
   const u=S.update; let h='';
   if(u.installing) h=`<span class="badge accent">${ic('refresh')} Updating…</span>`;
   else if(u.available) h=`<button class="btn sm primary" data-act="update">${ic('sparkle')} Update to ${esc(u.latest)}</button>`;
@@ -444,9 +490,15 @@ function renderSide(){
   const nav=(v,icon,label,extra='')=>`<button class="${ui.view===v?'sel':''}" data-act="view" data-v="${v}">${ic(icon)}${label}${extra}</button>`;
   setHTML($('#nav'),
     nav('transfers','arrows','Transfers', active.length?`<span class="badge accent count">${active.length}</span>`:'') +
-    (active.length?`<div class="mini-progress"><i style="width:${pct.toFixed(1)}%"></i></div>`:'') +
+    (active.length?`<div class="mini-progress"><i style="width:${pct.toFixed(1)}%"></i></div><div class="mini-speed">${speedSummary(active)}</div>`:'') +
     nav('shares','share','Shared folders', S.shares.length?`<span class="badge count">${S.shares.length}</span>`:'') +
     nav('settings','sliders','Settings', S.update.available?`<span class="badge warn count">1</span>`:''));
+}
+
+function speedSummary(active){
+  const up=active.filter(t=>t.kind==='send').reduce((a,t)=>a+(t.rate||0),0), down=active.filter(t=>t.kind!=='send').reduce((a,t)=>a+(t.rate||0),0);
+  const parts=[]; if(up>0) parts.push(`${ic('upload')} ${rateTxt(up)}`); if(down>0) parts.push(`${ic('download')} ${rateTxt(down)}`);
+  return parts.join('<span class="faint">·</span>') || 'Starting…';
 }
 
 // ---------- main views ----------
@@ -606,22 +658,25 @@ async function loadDir(){
 function rerenderTab(){ const tb=$('#tabbody'); const p=peerByFP(ui.sel); if(tb&&p&&ui.tab==='files') tb.innerHTML=viewBrowse(p); }
 
 function viewSend(p){
-  return `<div class="drop" id="drop">
-      <div class="big">${ic('upload','i-lg')}</div>
-      <h3>Drop files or folders to send to ${esc(p.name)}</h3>
-      <div>They arrive in its Wharfdrop folder. You can also drop anywhere on this window.</div>
-      <div class="acts"><button class="btn primary" data-act="pick-files">${ic('file')} Choose files</button><button class="btn" data-act="pick-folder">${ic('folder')} Choose folder</button></div>
+  return `<div class="sendgrid">
+    <div class="sendmain">
+      <div class="drop" id="drop">
+        <div class="big">${ic('upload','i-lg')}</div>
+        <h3>Drop files or folders to send to ${esc(p.name)}</h3>
+        <div>They arrive in its Wharfdrop folder. You can also drop anywhere on this window.</div>
+        <div class="acts"><button class="btn primary" data-act="pick-files">${ic('file')} Choose files</button><button class="btn" data-act="pick-folder">${ic('folder')} Choose folder</button></div>
+      </div>
+      <div id="upbar" class="upbar"></div>
     </div>
-    <div id="upbar" class="upbar"></div>
-    <div class="card" style="margin-top:22px;overflow:hidden"><div class="card-h"><b>Recent with ${esc(p.name)}</b></div><div id="recent"></div></div>`;
+    <div class="card recent" style="margin-top:20px;overflow:hidden"><div class="card-h"><b>Recent with ${esc(p.name)}</b></div><div id="recent" class="recent-list"></div></div>
+  </div>`;
 }
 
 function trRow(t){
   const pct = t.size>0 ? Math.min(100, t.done*100/t.size) : (t.finished&&!t.error?100:35);
-  const secs = ((t.finished?new Date(t.finished):new Date()) - new Date(t.started))/1000;
-  const rate = secs>0.05 ? fmt(t.done/secs)+'/s' : '';
   const incoming = t.kind!=='send';
-  const status = t.error ? `<span style="color:var(--danger)">Failed</span>` : (t.finished ? 'Done' : rate);
+  const live = [rateTxt(t.rate||t.avg), t.eta?fmtDur(t.eta)+' left':''].filter(Boolean).join(' · ');
+  const status = t.error ? `<span style="color:var(--danger)">Failed</span>` : (t.finished ? `Done${t.avg>0&&t.done>1048576?` · ${rateTxt(t.avg)} avg`:''}` : `<b class="live">${live||'Starting…'}</b>`);
   const verb = {send:'Sent to', receive:'Received from', download:'Downloaded from'}[t.kind] || '';
   return `<div class="tr">
     <span class="dir ${t.error?'err':(incoming?'in':'out')}">${ic(t.error?'alert':(incoming?'download':'upload'))}</span>
@@ -655,8 +710,13 @@ function viewSettings(){
   const seg=(v,l)=>`<button class="${u.mode===v?'sel':''}" data-act="umode" data-v="${v}">${l}</button>`;
   return `<div class="page"><div class="page-h"><div class="grow"><h1>Settings</h1></div></div>
   <div class="card">
-    <div class="set"><div><h4>Device name</h4><p>How this computer appears to others.</p></div>
-      <form class="inline" data-form="name"><input class="input" name="v" value="${esc(m.name)}" maxlength="40" style="max-width:320px"><button class="btn">Save</button></form></div>
+    <div class="set"><div><h4>Name and picture</h4><p>How this computer appears to your paired devices.</p></div>
+      <div class="idrow">
+        <div class="avset">${selfAvatar('big')}
+          <div class="avbtns"><button class="btn sm" data-act="pick-avatar">${ic('image')} ${m.avatar?'Change':'Add photo'}</button>
+          ${m.avatar?`<button class="btn sm ghost danger" data-act="remove-avatar">Remove</button>`:''}</div></div>
+        <form class="inline grow" data-form="name"><input class="input" name="v" value="${esc(m.name)}" maxlength="40" aria-label="Device name"><button class="btn">Save</button></form>
+      </div></div>
     <div class="set"><div><h4>Received files</h4><p>Where files sent to this computer are saved.</p></div>
       <form class="inline" data-form="incoming"><input class="input mono" name="v" value="${esc(S.incoming)}" style="max-width:420px"><button class="btn">Save</button><button class="btn ghost" type="button" data-act="open-incoming">${ic('folderOpen')} Open</button></form></div>
     <div class="set"><div><h4>Updates</h4><p>Updates are signed and verified before they install.</p></div>
@@ -685,7 +745,12 @@ function renderLive(){
     setHTML(us, t + ` <button class="btn sm" data-act="ucheck">${ic('refresh')} Check now</button>`);
     document.querySelectorAll('#useg button').forEach(b=>b.classList.toggle('sel', b.dataset.v===u.mode)); }
   const ub=$('#upbar'); if(ub){ const u=ui.upload;
-    setHTML(ub, u ? `<div class="card card-b"><div style="display:flex;justify-content:space-between;font-size:13px"><span class="ellipsis">Sending ${u.count} item${u.count>1?'s':''} to ${esc(u.peer)}</span><span class="muted">${u.total?Math.floor(u.loaded*100/u.total):0}% · ${fmt(u.loaded)} of ${fmt(u.total)}</span></div><div class="bar"><i style="width:${u.total?(u.loaded*100/u.total).toFixed(1):0}%"></i></div></div>` : ''); }
+    if(!u) setHTML(ub,'');
+    else { const pct=u.total?Math.min(100,u.loaded*100/u.total):0; const eta=u.rate>1?(u.total-u.loaded)/u.rate:0;
+      setHTML(ub, `<div class="card card-b upcard"><div class="uprow"><span class="ellipsis"><b>Sending ${u.count} item${u.count>1?'s':''}</b> to ${esc(u.peer)}${u.current?` <span class="muted">· ${esc(u.current)}</span>`:''}</span>
+        <button class="btn sm ghost danger" data-act="cancel-upload">${ic('x')} Cancel</button></div>
+        <div class="bar big"><i style="width:${pct.toFixed(1)}%"></i></div>
+        <div class="upstats"><span><b>${Math.floor(pct)}%</b> · ${fmt(u.loaded)} of ${fmt(u.total)}</span><span class="live">${u.rate>0?rateTxt(u.rate):'Starting…'}${eta?` · ${fmtDur(eta)} left`:''}</span></div></div>`); } }
 }
 
 // ---------- pairing & dialogs ----------
@@ -725,19 +790,80 @@ async function collect(dt){
   for(const e of entries) await walk(e,'');
   return out;
 }
-function send(files){
+const PARALLEL_MIN = 24<<20;   // files at least this big go in parallel chunks
+let uploadXHRs = new Set(), uploadCancelled = false;
+
+function xhrSend(method, url, body, onProgress){
+  return new Promise((resolve, reject)=>{
+    const x=new XMLHttpRequest(); uploadXHRs.add(x);
+    x.open(method, url); x.setRequestHeader('X-Token', T);
+    if(onProgress) x.upload.onprogress=e=>onProgress(e.loaded);
+    x.onload=()=>{ uploadXHRs.delete(x); if(x.status>=200&&x.status<300) resolve(x.responseText); else { let m=x.statusText; try{ m=JSON.parse(x.responseText).error||m }catch{} const err=new Error(m); err.status=x.status; reject(err); } };
+    x.onerror=()=>{ uploadXHRs.delete(x); reject(new Error('connection lost')); };
+    x.onabort=()=>{ uploadXHRs.delete(x); reject(new Error('cancelled')); };
+    x.send(body);
+  });
+}
+
+function trackRate(){
+  const u=ui.upload; if(!u) return; const now=performance.now();
+  if(!u.sampleAt){ u.sampleAt=now; u.sampleLoaded=u.loaded; return; }
+  const dt=(now-u.sampleAt)/1000; if(dt<0.4) return;
+  const inst=(u.loaded-u.sampleLoaded)/dt; u.rate = u.rate ? 0.55*inst+0.45*u.rate : inst;
+  u.sampleAt=now; u.sampleLoaded=u.loaded;
+}
+
+// Sends one big file as parallel 8 MB chunks. Returns false if the other
+// device is an older version without chunked uploads.
+async function sendChunked(p, file, rel, base){
+  let st;
+  try{ st=JSON.parse(await xhrSend('POST','/api/send/start', JSON.stringify({peer:p.fp, name:rel, size:file.size}))); }
+  catch(e){ if(e.status===409) return false; throw e; }
+  const chunk=st.chunk, streams=st.streams||4, perChunk=new Map(); let next=0, failed=null;
+  const report=()=>{ let sum=0; for(const v of perChunk.values()) sum+=v; ui.upload.loaded=base+sum; trackRate(); renderLive(); };
+  const worker=async()=>{
+    while(!failed && !uploadCancelled){
+      const off=next; if(off>=file.size) return; next+=chunk;
+      const blob=file.slice(off, Math.min(off+chunk, file.size));
+      for(let attempt=0;;attempt++){
+        try{ await xhrSend('PUT', `/api/send/chunk?id=${st.id}&off=${off}`, blob, n=>{ perChunk.set(off,n); report(); }); perChunk.set(off, blob.size); report(); break; }
+        catch(e){ perChunk.set(off,0); if(uploadCancelled||attempt>=2){ failed=e; return; } await new Promise(r=>setTimeout(r,400*(attempt+1))); }
+      }
+    }
+  };
+  await Promise.all(Array.from({length:streams}, worker));
+  if(failed||uploadCancelled){ try{ await xhrSend('POST',`/api/send/finish?id=${st.id}&abort=1`,null); }catch{} throw failed||new Error('cancelled'); }
+  await xhrSend('POST',`/api/send/finish?id=${st.id}`,null);
+  return true;
+}
+
+async function send(files){
   const p=sendTarget(); if(!p){ toast('Select a paired device first.','err'); return; }
   if(!files.length) return;
   if(ui.upload){ toast('Please wait for the current send to finish.','err'); return; }
-  const fd=new FormData(); for(const {file,rel} of files) fd.append('file', file, rel);
   const total=files.reduce((a,f)=>a+f.file.size,0);
-  ui.upload={peer:p.name, count:files.length, loaded:0, total}; renderLive();
-  const x=new XMLHttpRequest(); x.open('POST','/api/send?peer='+encodeURIComponent(p.fp)); x.setRequestHeader('X-Token',T);
-  x.upload.onprogress=e=>{ if(ui.upload){ ui.upload.loaded=e.loaded*(total/(e.total||total)); renderLive(); } };
-  x.onload=()=>{ ui.upload=null; if(x.status===200) toast(`Sent ${files.length} item${files.length>1?'s':''} to ${p.name}`); else { let m=x.statusText; try{ m=JSON.parse(x.responseText).error||m }catch{} toast('Send failed: '+m,'err'); } renderLive(); refresh(); };
-  x.onerror=()=>{ ui.upload=null; renderLive(); toast('Send failed: connection lost','err'); };
-  x.send(fd);
+  ui.upload={peer:p.name, count:files.length, loaded:0, total, rate:0}; uploadCancelled=false; renderLive();
+  const big=files.filter(f=>f.file.size>=PARALLEL_MIN), small=files.filter(f=>f.file.size<PARALLEL_MIN);
+  let done=0;
+  try{
+    for(const {file,rel} of big){
+      ui.upload.current=rel;
+      const ok=await sendChunked(p, file, rel, done);
+      if(!ok) small.push({file,rel}); else done+=file.size;
+    }
+    if(small.length && !uploadCancelled){
+      ui.upload.current = small.length===1 ? small[0].rel : `${small.length} smaller files`;
+      const fd=new FormData(); for(const {file,rel} of small) fd.append('file', file, rel);
+      const smallTotal=small.reduce((a,f)=>a+f.file.size,0), base=done;
+      await xhrSend('POST','/api/send?peer='+encodeURIComponent(p.fp), fd, n=>{ ui.upload.loaded=base+Math.min(n,smallTotal); trackRate(); renderLive(); });
+    }
+    toast(`Sent ${files.length} item${files.length>1?'s':''} to ${p.name}`);
+  }catch(e){ toast(uploadCancelled?'Send cancelled':'Send failed: '+e.message, uploadCancelled?'':'err'); }
+  ui.upload=null; renderLive(); refresh();
 }
+$('#avin').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  if(f.size>20<<20){ toast('Please choose a picture under 20 MB.','err'); return; }
+  try{ await api('/api/avatar',{method:'POST', body:f}); await refresh(); renderMain(); toast('Profile picture updated'); }catch(err){ toast(err.message,'err'); } };
 $('#fi').onchange=e=>{ send([...e.target.files].map(f=>({file:f, rel:f.name}))); e.target.value=''; };
 $('#di').onchange=e=>{ send([...e.target.files].map(f=>({file:f, rel:f.webkitRelativePath||f.name}))); e.target.value=''; };
 
@@ -764,6 +890,9 @@ const ACT = {
   vclose: () => { ui.viewer=null; renderViewer(); },
   vstep: d => vStep(+d.d),
   up: () => { const b=ui.browse; const parts=b.path?b.path.split('/'):[]; ACT.crumb({depth: String(parts.length ? parts.length-1 : -1)}); },
+  'cancel-upload': () => { uploadCancelled=true; for(const x of uploadXHRs) x.abort(); },
+  'pick-avatar': () => $('#avin').click(),
+  'remove-avatar': async () => { await api('/api/avatar',{method:'DELETE'}); await refresh(); renderMain(); toast('Profile picture removed'); },
   reload: () => { if(ui.browse.share) loadDir(); else loadShares(); },
   'pick-files': () => $('#fi').click(),
   'pick-folder': () => $('#di').click(),
@@ -818,7 +947,8 @@ document.addEventListener('submit', async e=>{
 
 $('#logo').innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${P.logo}</svg>`;
 $('#addbtn').innerHTML = ic('plus');
-refresh(); setInterval(refresh, 1500);
+async function loop(){ await refresh(); const busy = ui.upload || (S && S.transfers.some(t=>!t.finished)); setTimeout(loop, busy ? 700 : 1500); }
+loop();
 </script>
 </body>
 </html>

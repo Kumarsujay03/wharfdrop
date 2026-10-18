@@ -51,6 +51,13 @@ func (d *Daemon) localMux() http.Handler {
 	api.HandleFunc("POST /api/peer/download", d.lPeerDownload)
 	api.HandleFunc("POST /api/send", d.lSendUpload)
 	api.HandleFunc("POST /api/send-path", d.lSendPath)
+	api.HandleFunc("GET /api/avatar", d.lAvatarGet)
+	api.HandleFunc("POST /api/avatar", d.lAvatarSet)
+	api.HandleFunc("DELETE /api/avatar", d.lAvatarDelete)
+	api.HandleFunc("GET /api/peer/avatar", d.lPeerAvatar)
+	api.HandleFunc("POST /api/send/start", d.lSendStart)
+	api.HandleFunc("PUT /api/send/chunk", d.lSendChunk)
+	api.HandleFunc("POST /api/send/finish", d.lSendFinish)
 	api.HandleFunc("GET /api/transfers/{id}", d.lTransfer)
 	api.HandleFunc("GET /api/update", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.updateState()) })
 	api.HandleFunc("POST /api/update/check", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.CheckUpdate(r.Context())) })
@@ -108,6 +115,7 @@ type State struct {
 		Port    int      `json:"port"`
 		Addrs   []string `json:"addrs"`
 		Version string   `json:"version"`
+		Avatar  int64    `json:"avatar"` // avatar version (0 = none)
 	} `json:"self"`
 	Incoming   string          `json:"incoming"`
 	Peers      []peerView      `json:"peers"`
@@ -124,6 +132,7 @@ func (d *Daemon) state() State {
 	s.Self.Short = identity.Short(d.ID.Fingerprint)
 	s.Self.Addrs = LocalAddrs()
 	s.Self.Version = Version
+	s.Self.Avatar = d.AvatarVersion()
 	seen := map[string]discovery.Found{}
 	for _, f := range d.Disc.Peers() {
 		seen[f.FP] = f

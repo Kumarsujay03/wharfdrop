@@ -51,6 +51,7 @@ Usage:
   wharfdrop set name <name> | incoming <dir> | auto-update <auto|notify|off>
   wharfdrop update [--check]         install the latest release now (or only check)
   wharfdrop version
+  wharfdrop uninstall [--yes]        remove Wharfdrop (keeps your received files)
 
 <device> is a device name (as shown by status) or a fingerprint prefix.
 `
@@ -82,6 +83,8 @@ func main() {
 		fmt.Println("Stop it with: wharfdrop stop")
 	case "stop":
 		stop(dir, len(args) > 0 && args[0] == "--force")
+	case "uninstall":
+		uninstall(dir, len(args) > 0 && (args[0] == "--yes" || args[0] == "-y"))
 	case "ui":
 		c := start(dir)
 		url := c.uiURL()
