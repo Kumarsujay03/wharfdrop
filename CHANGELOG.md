@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `install.ps1` could not read GitHub's "latest release" redirect on Windows PowerShell 5.1,
+  so it fell back to the GitHub REST API. That fails once the 60-requests-per-hour limit is
+  hit and can return a stale version. It now reads the redirect directly on 5.1 and 7.
+
 ## [0.2.1] - 2026-10-18
 
 ### Fixed

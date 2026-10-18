@@ -41,21 +41,37 @@ if ($env:WHARFDROP_UNINSTALL) {
 
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
 
+# The latest release is found from the github.com/<repo>/releases/latest
+# redirect, which (unlike the REST API) has no 60-requests-per-hour limit.
+# HttpWebRequest behaves the same in Windows PowerShell 5.1 and PowerShell 7.
+function Get-LatestTag {
+    $url = "https://github.com/$repo/releases/latest"
+    $loc = $null
+    try {
+        $req = [System.Net.HttpWebRequest]::Create($url)
+        $req.Method = 'HEAD'
+        $req.AllowAutoRedirect = $false
+        $req.UserAgent = 'wharfdrop-installer'
+        $resp = $req.GetResponse()
+        $loc = $resp.Headers['Location']
+        $resp.Close()
+    } catch [System.Net.WebException] {
+        if ($_.Exception.Response) { $loc = $_.Exception.Response.Headers['Location'] }
+    }
+    if ($loc -match '/releases/tag/(v\d+\.\d+\.\d+)$') { return $Matches[1] }
+
+    # Fallback: follow the redirect and read the final address.
+    $r = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $url
+    $final = $null
+    if ($r.BaseResponse.ResponseUri) { $final = $r.BaseResponse.ResponseUri.AbsoluteUri }                       # PowerShell 5.1
+    elseif ($r.BaseResponse.RequestMessage) { $final = $r.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }  # PowerShell 7
+    if ($final -match '/releases/tag/(v\d+\.\d+\.\d+)$') { return $Matches[1] }
+    throw "Could not find the latest release (redirect: '$loc', final address: '$final')."
+}
+
 Write-Host 'Finding the latest Wharfdrop release...'
-$tag = $null
-try {
-    $resp = Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/$repo/releases/latest" -MaximumRedirection 0 -ErrorAction Stop
-    $loc = $resp.Headers.Location
-} catch {
-    $loc = $_.Exception.Response.Headers.Location
-    if ($loc -and $loc.GetType().Name -eq 'Uri') { $loc = $loc.ToString() }
-}
-if ($loc -match '/releases/tag/(v\d+\.\d+\.\d+)$') { $tag = $Matches[1] }
-if (-not $tag) {
-    # fall back to the API
-    $tag = (Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/$repo/releases/latest").tag_name
-}
-if (-not $tag) { throw 'Could not find the latest release.' }
+$tag = Get-LatestTag
+Write-Host "Latest release: $tag"
 
 $asset = "wharfdrop-$tag-windows-$arch.exe"
 $base  = "https://github.com/$repo/releases/download/$tag"

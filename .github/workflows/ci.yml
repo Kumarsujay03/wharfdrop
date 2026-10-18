@@ -75,17 +75,41 @@ jobs:
           Start-Sleep 1
           if (Get-Process wharfdrop -ErrorAction SilentlyContinue) { throw "still running after stop" }
           Write-Host "smoke test passed"
-      - name: Installer (install, run, uninstall)
+      - name: Installer on Windows PowerShell 5.1
         shell: powershell
         env:
           WHARFDROP_NO_LAUNCH: "1"
           WHARFDROP_DIR: ${{ runner.temp }}\wd2
         run: |
-          .\install.ps1
+          $PSVersionTable.PSVersion
+          $out = .\install.ps1 *>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'Latest release: (v\d+\.\d+\.\d+)') { throw "installer did not find the latest release" }
+          $tag = $Matches[1]
           $exe = Join-Path $env:LOCALAPPDATA 'Programs\Wharfdrop\wharfdrop.exe'
-          & $exe version; if ($LASTEXITCODE) { throw "installed binary does not run" }
+          $ver = & $exe version
+          if ($ver -ne "wharfdrop $tag") { throw "installed '$ver', expected $tag" }
           if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Wharfdrop.lnk'))) { throw "no Start menu shortcut" }
           $env:WHARFDROP_UNINSTALL = "1"
           .\install.ps1
           if (Test-Path $exe) { throw "uninstall left the binary" }
-          Write-Host "installer test passed"
+          Write-Host "installer test passed on Windows PowerShell 5.1"
+      - name: Installer on PowerShell 7
+        shell: pwsh
+        env:
+          WHARFDROP_NO_LAUNCH: "1"
+          WHARFDROP_DIR: ${{ runner.temp }}\wd3
+        run: |
+          $PSVersionTable.PSVersion
+          $out = .\install.ps1 *>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'Latest release: (v\d+\.\d+\.\d+)') { throw "installer did not find the latest release" }
+          $tag = $Matches[1]
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Wharfdrop\wharfdrop.exe'
+          $ver = & $exe version
+          if ($ver -ne "wharfdrop $tag") { throw "installed '$ver', expected $tag" }
+          if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Wharfdrop.lnk'))) { throw "no Start menu shortcut" }
+          $env:WHARFDROP_UNINSTALL = "1"
+          .\install.ps1
+          if (Test-Path $exe) { throw "uninstall left the binary" }
+          Write-Host "installer test passed on PowerShell 7"
