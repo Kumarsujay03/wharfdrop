@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -107,28 +106,4 @@ func removeConfigDir(dir, incoming string) error {
 		}
 		return nil
 	})
-}
-
-// windowsCleanup removes the shortcut and PATH entry, then deletes the running
-// .exe (and its folder, if empty) from a short-lived helper after we exit.
-func windowsCleanup(exe string) {
-	appdata := os.Getenv("APPDATA")
-	if appdata != "" {
-		os.Remove(filepath.Join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Wharfdrop.lnk"))
-	}
-	if exe == "" {
-		return
-	}
-	folder := filepath.Dir(exe)
-	q := func(v string) string { return "'" + strings.ReplaceAll(v, "'", "''") + "'" } // PowerShell literal string
-	ps := "$d=" + q(folder) + "; $e=" + q(exe) + "; " +
-		"$p=[Environment]::GetEnvironmentVariable('Path','User'); " +
-		"if($p){ [Environment]::SetEnvironmentVariable('Path', (($p -split ';') | Where-Object { $_ -and ($_.TrimEnd('\\') -ne $d.TrimEnd('\\')) }) -join ';', 'User') }; " +
-		// wait for wharfdrop.exe to exit, then delete it (retry for up to ~20 s)
-		"for($i=0; $i -lt 40; $i++){ Start-Sleep -Milliseconds 500; Remove-Item -Force -LiteralPath $e -ErrorAction SilentlyContinue; if(-not (Test-Path -LiteralPath $e)){ break } }; " +
-		"Remove-Item -Force -LiteralPath ($e + '.old') -ErrorAction SilentlyContinue; " +
-		"if(-not (Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)){ Remove-Item -Force -LiteralPath $d -ErrorAction SilentlyContinue }"
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", ps)
-	detach(cmd)
-	cmd.Start()
 }
