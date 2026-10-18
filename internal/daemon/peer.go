@@ -36,6 +36,10 @@ func (d *Daemon) peerMux() http.Handler {
 	m.HandleFunc("GET /ls", d.trusted(d.hLs))
 	m.HandleFunc("GET /get", d.trusted(d.hGet))
 	m.HandleFunc("POST /send", d.trusted(d.hRecv))
+	m.HandleFunc("POST /recv/start", d.trusted(d.hRecvStart))
+	m.HandleFunc("PUT /recv/chunk", d.trusted(d.hRecvChunk))
+	m.HandleFunc("POST /recv/finish", d.trusted(d.hRecvFinish))
+	m.HandleFunc("GET /avatar", d.trusted(d.hAvatar))
 	return m
 }
 
@@ -268,7 +272,7 @@ func (d *Daemon) hRecv(w http.ResponseWriter, r *http.Request, p *config.Peer) {
 	}
 	t := d.transfers.Start("receive", p.Name, name, size)
 	t.Dest = full
-	_, err = copyBuf(f, &countingReader{r.Body, t})
+	_, err = copyBuf(f, &countingReader{r: r.Body, t: t})
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -348,7 +352,7 @@ func (d *Daemon) peer(fp string) (*peerClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &peerClient{d: d, fp: fp, addr: addr, c: d.client(fp, nil)}, nil
+	return &peerClient{d: d, fp: fp, addr: addr, c: d.peerHTTP(fp)}, nil
 }
 
 func (pc *peerClient) get(ctx context.Context, p string, q url.Values) (*http.Response, error) {
@@ -415,7 +419,7 @@ func (pc *peerClient) Download(ctx context.Context, share, p, destDir string) (*
 	pname, _ := pc.d.Cfg.Trusted(pc.fp)
 	t := pc.d.transfers.Start("download", pname.Name, name, resp.ContentLength)
 	t.Dest = full
-	_, err = copyBuf(f, &countingReader{resp.Body, t})
+	_, err = copyBuf(f, &countingReader{r: resp.Body, t: t})
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -434,7 +438,7 @@ func (pc *peerClient) SendStream(ctx context.Context, name string, size int64, r
 	pname, _ := pc.d.Cfg.Trusted(pc.fp)
 	t := pc.d.transfers.Start("send", pname.Name, name, size)
 	q := url.Values{"name": {name}, "size": {strconv.FormatInt(size, 10)}}
-	req, _ := http.NewRequestWithContext(ctx, "POST", pc.d.peerURL(pc.addr, "/send", q), &countingReader{r, t})
+	req, _ := http.NewRequestWithContext(ctx, "POST", pc.d.peerURL(pc.addr, "/send", q), &countingReader{r: r, t: t})
 	req.ContentLength = size
 	resp, err := pc.c.Do(req)
 	if err == nil {
@@ -454,28 +458,18 @@ func (pc *peerClient) SendPath(ctx context.Context, local string) ([]*Transfer, 
 	if err != nil {
 		return nil, err
 	}
-	var out []*Transfer
 	if !info.IsDir() {
-		f, err := os.Open(local)
-		if err != nil {
-			return nil, err
-		}
-		defer f.Close()
-		t, err := pc.SendStream(ctx, info.Name(), info.Size(), f)
+		t, err := pc.SendFile(ctx, info.Name(), local)
 		return []*Transfer{t}, err
 	}
+	var out []*Transfer
 	base := filepath.Base(local)
 	err = filepath.Walk(local, func(p string, fi os.FileInfo, err error) error {
 		if err != nil || !fi.Mode().IsRegular() {
 			return err
 		}
 		rel, _ := filepath.Rel(local, p)
-		f, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		t, err := pc.SendStream(ctx, path.Join(base, filepath.ToSlash(rel)), fi.Size(), f)
+		t, err := pc.SendFile(ctx, path.Join(base, filepath.ToSlash(rel)), p)
 		out = append(out, t)
 		return err
 	})
@@ -625,6 +619,7 @@ func (d *Daemon) RespondIncoming(id string, allow bool) error {
 }
 
 func (d *Daemon) Unpair(fp string) error {
+	forgetClient(fp)
 	return d.Cfg.Update(func(c *config.Config) {
 		delete(c.Peers, fp)
 		for _, s := range c.Shares {

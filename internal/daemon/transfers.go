@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"io"
 	"sort"
 	"sync"
@@ -19,25 +20,49 @@ type Transfer struct {
 	Finished time.Time `json:"finished,omitempty"`
 	Error    string    `json:"error,omitempty"`
 	Dest     string    `json:"dest,omitempty"`
+	Rate     float64   `json:"rate"`          // current speed in bytes/s (smoothed)
+	Avg      float64   `json:"avg"`           // average speed since start
+	ETA      float64   `json:"eta,omitempty"` // seconds left, when size is known
+	Streams  int       `json:"streams,omitempty"`
 	cur      int64     // progress counter; accessed atomically
+	sampleAt time.Time // last speed sample (guarded by Transfers.mu)
+	sampleN  int64
 }
 
 func (t *Transfer) snapshot() Transfer {
-	c := *t
-	c.Done = atomic.LoadInt64(&t.cur)
-	return c
-}
-
-// Rate returns bytes per second so far.
-func (t *Transfer) Rate() float64 {
-	el := time.Since(t.Started).Seconds()
+	now := time.Now()
+	done := atomic.LoadInt64(&t.cur)
+	if t.Finished.IsZero() {
+		// Smoothed instantaneous speed, sampled at most every 400 ms.
+		if t.sampleAt.IsZero() {
+			t.sampleAt, t.sampleN = t.Started, 0
+		}
+		if dt := now.Sub(t.sampleAt).Seconds(); dt >= 0.4 {
+			inst := float64(done-t.sampleN) / dt
+			if t.Rate == 0 {
+				t.Rate = inst
+			} else {
+				t.Rate = 0.55*inst + 0.45*t.Rate
+			}
+			t.sampleAt, t.sampleN = now, done
+		}
+	} else {
+		t.Rate = 0
+	}
+	end := now
 	if !t.Finished.IsZero() {
-		el = t.Finished.Sub(t.Started).Seconds()
+		end = t.Finished
 	}
-	if el <= 0 {
-		return 0
+	if el := end.Sub(t.Started).Seconds(); el > 0 {
+		t.Avg = float64(done) / el
 	}
-	return float64(atomic.LoadInt64(&t.cur)) / el
+	t.ETA = 0
+	if t.Finished.IsZero() && t.Size > 0 && t.Rate > 1 {
+		t.ETA = float64(t.Size-done) / t.Rate
+	}
+	c := *t
+	c.Done = done
+	return c
 }
 
 type Transfers struct {
@@ -113,11 +138,13 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 type countingReader struct {
 	r io.Reader
 	t *Transfer
+	n int64 // bytes read through this reader
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	atomic.AddInt64(&c.t.cur, int64(n))
+	c.n += int64(n)
 	return n, err
 }
 
@@ -125,4 +152,20 @@ func (c *countingReader) Read(p []byte) (int, error) {
 func copyBuf(dst io.Writer, src io.Reader) (int64, error) {
 	buf := make([]byte, 1<<20)
 	return io.CopyBuffer(dst, src, buf)
+}
+
+// MarshalJSON leaves "finished" out while a transfer is running. A zero
+// time.Time would otherwise be sent as "0001-01-01T00:00:00Z", which the web
+// UI reads as finished.
+func (t Transfer) MarshalJSON() ([]byte, error) {
+	type plain Transfer
+	var fin *time.Time
+	if !t.Finished.IsZero() {
+		f := t.Finished
+		fin = &f
+	}
+	return json.Marshal(struct {
+		plain
+		Finished *time.Time `json:"finished,omitempty"`
+	}{plain(t), fin})
 }

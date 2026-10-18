@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-10-18
+
+### Added
+- **Live speed and time left** while sending and receiving, on both devices: in the send panel,
+  on the Transfers page and next to Transfers in the sidebar. Finished transfers show their
+  average speed.
+- **Faster transfers on noisy Wi-Fi.** Files of 24 MB or more are sent as 8 MB chunks over four
+  parallel connections, with per-chunk retries. Connections to a device are reused, and both
+  sides use larger network buffers. Older devices fall back to a single stream automatically.
+- **Cancel** button for sends from the web UI.
+- **Profile picture** in Settings, shown to your paired devices.
+- **`wharfdrop uninstall`** removes the program, settings, keys and logs (and on Windows the
+  Start menu shortcut and PATH entry) while keeping your received files.
+
+### Changed
+- Layouts adapt to the window height, so pages fit without scrolling on laptop and desktop
+  screens down to 1280×720. On wide screens the Send tab shows recent transfers beside the
+  drop area.
+
+### Fixed
+- Transfers still in progress were shown as "Done", and the sidebar progress never appeared.
+  Running transfers no longer carry a placeholder "finished" time.
+
 ## [0.3.0] - 2026-10-18
 
 ### Added
@@ -80,6 +103,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.4.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.3.0
 [0.2.2]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.2
 [0.2.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.2.1

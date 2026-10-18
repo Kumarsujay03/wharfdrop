@@ -125,7 +125,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.peerSrv = &http.Server{Handler: d.peerMux(), TLSConfig: tlsCfg,
 		ReadHeaderTimeout: 10 * time.Second}
 	go func() {
-		if err := d.peerSrv.ServeTLS(peerLn, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := d.peerSrv.ServeTLS(bufListener{peerLn}, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("peer server: %v", err)
 		}
 	}()
@@ -147,6 +147,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.expirePairings(ctx)
 	go d.probePeers(ctx)
 	go d.updateLoop(ctx)
+	go d.expireInbound(ctx)
 
 	var result error
 	select {

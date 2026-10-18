@@ -24,13 +24,15 @@ terminal.
   on 2.4 GHz and the other on 5 or 6 GHz, as long as both use the same router.
 * **Pair once, like Bluetooth.** Both screens show the same 6-digit code and you confirm on both.
 * **Encrypted end to end** with TLS 1.3 and pinned device keys. Unpaired devices are refused.
-* **Send files and folders** by drag and drop, with live progress.
+* **Send files and folders** by drag and drop, with live speed and time left on both devices.
+  Large files travel over four parallel connections, which copes better with Wi-Fi interference.
 * **Share folders read-only** with one paired device or all of them.
 * **Browse with previews.** Switch between grid and list view, see photo thumbnails, and open
   photos, videos, audio, PDFs and text files in a built-in viewer. Download single files or
   whole folders as a zip.
 * **Runs only when you want it.** Start it, use it, stop it. It never starts at login.
 * **Keeps itself up to date** with signed updates from this repository's releases.
+* **Profile pictures** so your paired devices are easy to tell apart.
 * **Web UI and CLI.** Everything in the interface can also be done from the terminal.
 
 ## Screenshots
@@ -73,11 +75,7 @@ Prefer doing it by hand? Download `wharfdrop-<version>-windows-amd64.exe` from t
 background and opens the web UI in your browser. If SmartScreen warns about an unrecognised
 app, click **More info** and then **Run anyway**.
 
-To uninstall:
-
-```powershell
-$env:WHARFDROP_UNINSTALL=1; irm https://raw.githubusercontent.com/Kumarsujay03/wharfdrop/main/install.ps1 | iex
-```
+To uninstall, see [Uninstall](#uninstall).
 
 ### Linux and macOS
 
@@ -237,12 +235,44 @@ devices remember each other's last address.
 
 ## Speed
 
-Transfers are plain TLS streams over HTTP/1.1 with 1 MiB buffers and 4 MiB socket buffers;
-Go's AES-GCM uses hardware acceleration, so the Wi-Fi link is the bottleneck, not the
-software (loopback runs at >1 GB/s). On Wi-Fi, two clients on the same access point talk
-*through* the AP, so expect roughly half of the slower device's link rate. A device on
-2.4 GHz caps the pair at a few MB/s to ~10 MB/s; two 5 GHz Wi-Fi 6 devices reach
-30-80 MB/s. Plugging either machine into the router by Ethernet helps a lot.
+Wharfdrop is rarely the bottleneck: it moves well over 1 GB/s between two processes on one
+machine. Over Wi-Fi the radio link decides.
+
+* Files of 24 MB or more are sent as 8 MB chunks over **four parallel TLS connections**, reusing
+  connections between requests. Several connections recover from Wi-Fi packet loss better
+  than one. Smaller files use a single stream.
+* Two devices on the same access point talk *through* it, so expect roughly half of the
+  slower device's link rate. A device on **2.4 GHz** usually caps the pair at 5-15 MB/s.
+  Two **5 GHz / Wi-Fi 6** devices typically reach 30-80 MB/s.
+* The biggest improvement is hardware: move the slower device to 5 GHz or plug either one
+  into the router with Ethernet.
+
+Measured on a simulated link (Linux `netem`), 500 MB file, v0.3.0 vs v0.4.0:
+
+| Simulated link | v0.3.0 | v0.4.0 |
+|---|---|---|
+| 5 GHz-like, 400 Mbit/s, 0.3% loss | 48.4 MB/s | 48.2 MB/s |
+| 2.4 GHz-like, 120 Mbit/s, 1% loss | 13.5 MB/s | 14.6 MB/s |
+| Busy 2.4 GHz, 120 Mbit/s, 2% loss | 12.5 MB/s | 14.5 MB/s |
+
+Real Wi-Fi varies more than a simulation, so treat these as a guide.
+
+## Uninstall
+
+```bash
+wharfdrop uninstall
+```
+
+This stops Wharfdrop and removes the program, its settings, device keys and logs. On Windows
+it also removes the Start menu shortcut and the PATH entry. **Your received files are kept**
+(by default in the `Wharfdrop` folder in your home folder). Add `--yes` to skip the question.
+Paired devices will need to pair again if you reinstall.
+
+The Windows installer can also uninstall:
+
+```powershell
+$env:WHARFDROP_UNINSTALL=1; irm https://raw.githubusercontent.com/Kumarsujay03/wharfdrop/main/install.ps1 | iex
+```
 
 ## FAQ
 
