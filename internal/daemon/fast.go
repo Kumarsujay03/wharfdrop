@@ -29,7 +29,8 @@ const (
 	chunkSize       = 8 << 20  // bytes per parallel chunk
 	parallelMin     = 24 << 20 // files smaller than this use one stream
 	parallelStreams = 4
-	inboundIdle     = 10 * time.Minute
+	inboundIdle     = 2 * time.Minute // no bytes for this long: the sender is gone
+	outboundIdle    = time.Minute     // browser stopped sending chunks
 )
 
 // ---------- connection reuse ----------
@@ -137,13 +138,14 @@ func (d *Daemon) hRecvStart(w http.ResponseWriter, r *http.Request, p *config.Pe
 	}
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o644)
 	if err == nil {
+		d.parts.add(tmp)
 		err = f.Truncate(in.Size)
 	}
 	if err != nil {
 		inbounds.mu.Unlock()
 		if f != nil {
 			f.Close()
-			os.Remove(tmp)
+			d.parts.drop(tmp)
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -194,6 +196,9 @@ func (d *Daemon) hRecvChunk(w http.ResponseWriter, r *http.Request, p *config.Pe
 			}
 			n += int64(k)
 			atomic.AddInt64(&in.t.cur, int64(k))
+			inbounds.mu.Lock()
+			in.last = time.Now()
+			inbounds.mu.Unlock()
 		}
 		if rerr == io.EOF {
 			break
@@ -229,7 +234,9 @@ func (d *Daemon) hRecvFinish(w http.ResponseWriter, r *http.Request, p *config.P
 	}
 	err := in.f.Close()
 	if err == nil {
-		err = os.Rename(in.tmp, in.full)
+		err = d.parts.keep(in.tmp, in.full)
+	} else {
+		d.parts.drop(in.tmp)
 	}
 	inbounds.mu.Lock()
 	delete(inbounds.m, id)
@@ -237,7 +244,6 @@ func (d *Daemon) hRecvFinish(w http.ResponseWriter, r *http.Request, p *config.P
 	atomic.StoreInt64(&in.t.cur, in.size)
 	d.transfers.Finish(in.t, err)
 	if err != nil {
-		os.Remove(in.tmp)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -249,13 +255,33 @@ func (d *Daemon) dropInbound(id string, in *inbound, why error) {
 	delete(inbounds.m, id)
 	inbounds.mu.Unlock()
 	in.f.Close()
-	os.Remove(in.tmp)
+	d.parts.drop(in.tmp)
 	d.transfers.Finish(in.t, why)
 }
 
+// dropInboundFrom cancels unfinished uploads from one peer (fp), or from all
+// peers (fp == ""), and deletes their partial files.
+func (d *Daemon) dropInboundFrom(fp string, why error) {
+	inbounds.mu.Lock()
+	victims := map[string]*inbound{}
+	for id, in := range inbounds.m {
+		if fp == "" || in.peer == fp {
+			victims[id] = in
+		}
+	}
+	inbounds.mu.Unlock()
+	for id, in := range victims {
+		in.mu.Lock()
+		d.dropInbound(id, in, why)
+		in.mu.Unlock()
+	}
+}
+
+func (d *Daemon) dropAllInbound(why error) { d.dropInboundFrom("", why) }
+
 // expireInbound removes uploads whose sender went away.
 func (d *Daemon) expireInbound(ctx context.Context) {
-	t := time.NewTicker(time.Minute)
+	t := time.NewTicker(15 * time.Second)
 	defer t.Stop()
 	for {
 		select {
@@ -264,18 +290,29 @@ func (d *Daemon) expireInbound(ctx context.Context) {
 		case <-t.C:
 		}
 		inbounds.mu.Lock()
-		var stale []string
+		stale := map[string]*inbound{}
 		for id, in := range inbounds.m {
 			if time.Since(in.last) > inboundIdle {
-				stale = append(stale, id)
+				stale[id] = in
 			}
 		}
 		inbounds.mu.Unlock()
-		for _, id := range stale {
-			if in, ok := inbounds.m[id]; ok {
-				d.dropInbound(id, in, errors.New("sender stopped responding"))
-			}
+		for id, in := range stale {
+			in.mu.Lock()
+			d.dropInbound(id, in, errors.New("the sender stopped; the unfinished file was deleted"))
+			in.mu.Unlock()
 		}
+		// browser uploads whose page went away: tell the receiver to delete
+		outbounds.Range(func(k, v any) bool {
+			ob := v.(*outbound)
+			if time.Since(ob.lastSeen()) > outboundIdle && outbounds.CompareAndDelete(k, v) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				ob.pc.finishUpload(ctx, ob.id, true)
+				cancel()
+				d.transfers.Finish(ob.t, errors.New("the send stopped (the Wharfdrop window was closed)"))
+			}
+			return true
+		})
 	}
 }
 
@@ -321,6 +358,7 @@ func (pc *peerClient) putChunk(ctx context.Context, id string, off int64, body i
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("chunk at %d: %s", off, resp.Status)
 	}
+	pc.d.markOK(pc.fp)
 	return nil
 }
 
@@ -368,6 +406,8 @@ func (pc *peerClient) SendFile(ctx context.Context, name, path string) (*Transfe
 		pc.d.transfers.Finish(t, err)
 		return t, err
 	}
+	activeUps.Store(id, pc)
+	defer activeUps.Delete(id)
 	err = pc.sendChunks(ctx, id, fi.Size(), t, func(off, n int64) io.Reader { return io.NewSectionReader(f, off, n) })
 	if err == nil {
 		err = pc.finishUpload(ctx, id, false)
@@ -428,9 +468,45 @@ type outbound struct {
 	id   string
 	t    *Transfer
 	size int64
+	last atomic.Int64 // unix nanos of the last chunk activity
 }
 
+func (ob *outbound) touch()              { ob.last.Store(time.Now().UnixNano()) }
+func (ob *outbound) lastSeen() time.Time { return time.Unix(0, ob.last.Load()) }
+
 var outbounds sync.Map // local id -> *outbound
+
+// activeUps holds chunked uploads in progress from this computer
+// (peer upload id -> *peerClient), so stopping can cancel them on the receiver.
+var activeUps sync.Map
+
+// abortOutgoing tells receivers to delete the unfinished files of every send
+// in progress. Called when Wharfdrop stops.
+func (d *Daemon) abortOutgoing() {
+	var wg sync.WaitGroup
+	cancelOne := func(pc *peerClient, id string) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+			defer cancel()
+			pc.finishUpload(ctx, id, true)
+		}()
+	}
+	outbounds.Range(func(k, v any) bool {
+		ob := v.(*outbound)
+		outbounds.Delete(k)
+		cancelOne(ob.pc, ob.id)
+		d.transfers.Finish(ob.t, errors.New("Wharfdrop stopped"))
+		return true
+	})
+	activeUps.Range(func(k, v any) bool {
+		activeUps.Delete(k)
+		cancelOne(v.(*peerClient), k.(string))
+		return true
+	})
+	wg.Wait()
+}
 
 func (d *Daemon) lSendStart(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -459,8 +535,10 @@ func (d *Daemon) lSendStart(w http.ResponseWriter, r *http.Request) {
 	t := d.transfers.Start("send", pname.Name, in.Name, in.Size)
 	t.Streams = parallelStreams
 	lid := newID()
-	outbounds.Store(lid, &outbound{pc: pc, id: id, t: t, size: in.Size})
-	writeJSON(w, map[string]any{"id": lid, "chunk": chunkSize, "streams": parallelStreams})
+	ob := &outbound{pc: pc, id: id, t: t, size: in.Size}
+	ob.touch()
+	outbounds.Store(lid, ob)
+	writeJSON(w, map[string]any{"id": lid, "tid": t.ID, "chunk": chunkSize, "streams": parallelStreams})
 }
 
 func (d *Daemon) lSendChunk(w http.ResponseWriter, r *http.Request) {
@@ -475,6 +553,8 @@ func (d *Daemon) lSendChunk(w http.ResponseWriter, r *http.Request) {
 		fail(w, errors.New("bad offset or length"), 400)
 		return
 	}
+	ob.touch()
+	defer ob.touch()
 	cr := &countingReader{r: r.Body, t: ob.t}
 	if err := ob.pc.putChunk(r.Context(), ob.id, off, cr, r.ContentLength); err != nil {
 		atomic.AddInt64(&ob.t.cur, -cr.n)

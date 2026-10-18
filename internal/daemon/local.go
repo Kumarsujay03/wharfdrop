@@ -158,7 +158,7 @@ func (d *Daemon) state() State {
 				delete(seen, fp)
 			} else {
 				d.mu.Lock()
-				pv.Online = d.reachable[fp]
+				pv.Online = d.reachable[fp] || d.recentlyOK(fp)
 				d.mu.Unlock()
 			}
 			s.Peers = append(s.Peers, pv)
@@ -443,7 +443,7 @@ func (d *Daemon) lPeerDownload(w http.ResponseWriter, r *http.Request) {
 	if in.Dest == "" {
 		in.Dest = d.Cfg.IncomingDir
 	}
-	t, err := pc.Download(context.Background(), in.Share, in.Path, in.Dest)
+	t, err := pc.Download(d.lifeCtx(), in.Share, in.Path, in.Dest)
 	if err != nil {
 		fail(w, err, 502)
 		return
@@ -504,7 +504,7 @@ func (d *Daemon) lSendPath(w http.ResponseWriter, r *http.Request) {
 		fail(w, err, 400)
 		return
 	}
-	ts, err := pc.SendPath(context.Background(), in.Path)
+	ts, err := pc.SendPath(d.lifeCtx(), in.Path)
 	if err != nil {
 		fail(w, err, 502)
 		return

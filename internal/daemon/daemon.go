@@ -62,6 +62,9 @@ type Daemon struct {
 	peerSrv    *http.Server
 	localSrv   *http.Server
 	ui         uiTracker
+	parts      *partJournal
+	life       context.Context      // cancelled when Wharfdrop starts stopping
+	lastOK     map[string]time.Time // peer fp -> last successful request to it
 }
 
 func New(dir string) (*Daemon, error) {
@@ -82,6 +85,8 @@ func New(dir string) (*Daemon, error) {
 		transfers: NewTransfers(), reachable: map[string]bool{},
 		restart: make(chan struct{}, 1), shutdown: make(chan struct{}, 1)}
 	d.phones = newPhoneHub(d)
+	d.parts = newPartJournal(dir)
+	d.lastOK = map[string]time.Time{}
 	d.Disc = discovery.New(func() discovery.Beacon {
 		var b discovery.Beacon
 		cfg.View(func(c *config.Config) {
@@ -110,6 +115,15 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := os.MkdirAll(d.Cfg.IncomingDir, 0o755); err != nil {
 		return err
 	}
+	d.parts.cleanAll() // left over from a crash or power cut
+	// Requests in progress (sends, receives) are cancelled as soon as
+	// stopping begins, so shutdown does not wait for them.
+	stopCtx, stopNow := context.WithCancel(context.Background())
+	defer stopNow()
+	d.mu.Lock()
+	d.life = stopCtx
+	d.mu.Unlock()
+	base := func(net.Listener) context.Context { return stopCtx }
 	d.Disc.Start()
 	defer d.Disc.Stop()
 
@@ -126,7 +140,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		NextProtos:            []string{"http/1.1"}, // HTTP/1.1 streams large bodies faster than h2 flow control
 	}
 	d.peerSrv = &http.Server{Handler: d.peerMux(), TLSConfig: tlsCfg,
-		ReadHeaderTimeout: 10 * time.Second}
+		ReadHeaderTimeout: 10 * time.Second, BaseContext: base}
 	go func() {
 		if err := d.peerSrv.ServeTLS(bufListener{peerLn}, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("peer server: %v", err)
@@ -137,7 +151,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("ui port %d: %w", d.Cfg.UIPort, err)
 	}
-	d.localSrv = &http.Server{Handler: d.localMux(), ReadHeaderTimeout: 10 * time.Second}
+	d.localSrv = &http.Server{Handler: d.localMux(), ReadHeaderTimeout: 10 * time.Second, BaseContext: base}
 	go func() {
 		if err := d.localSrv.Serve(localLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("local server: %v", err)
@@ -169,13 +183,23 @@ func (d *Daemon) Run(ctx context.Context) error {
 		d.phones.StopWith("updating", "Wharfdrop on "+cname+" is updating. Open the phone link again in a moment.")
 		result = ErrRestart
 	}
+	stopNow()
+	// in parallel: receivers delete what they got so far, and paired
+	// computers mark us offline right away
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); d.abortOutgoing() }()
 	if result == nil {
-		d.sayGoodbye() // paired computers mark us offline right away
+		wg.Add(1)
+		go func() { defer wg.Done(); d.sayGoodbye() }()
 	}
+	wg.Wait()
+	d.dropAllInbound(errors.New("Wharfdrop stopped"))
 	shut, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	d.peerSrv.Shutdown(shut)
 	d.localSrv.Shutdown(shut)
+	d.parts.cleanAll() // anything still unfinished
 	return result
 }
 
@@ -242,14 +266,14 @@ func (d *Daemon) probePeers(ctx context.Context) {
 			}
 			pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			req, _ := http.NewRequestWithContext(pctx, "GET", d.peerURL(p.LastAddr, "/info", nil), nil)
-			resp, err := d.client(p.Fingerprint, nil).Do(req)
+			resp, err := d.peerHTTP(p.Fingerprint).Do(req) // reuses connections
 			ok := err == nil
 			if ok {
 				resp.Body.Close()
 			}
 			cancel()
 			d.mu.Lock()
-			d.reachable[p.Fingerprint] = ok
+			d.reachable[p.Fingerprint] = ok || d.recentlyOK(p.Fingerprint)
 			d.mu.Unlock()
 		}
 	}

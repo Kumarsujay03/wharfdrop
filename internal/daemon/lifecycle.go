@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"sync"
@@ -10,13 +11,43 @@ import (
 	"github.com/Kumarsujay03/wharfdrop/internal/config"
 )
 
+// lifeCtx is cancelled when Wharfdrop starts stopping. Sends and downloads
+// that should outlive the request that started them use it.
+func (d *Daemon) lifeCtx() context.Context {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.life == nil {
+		return context.Background()
+	}
+	return d.life
+}
+
+// ---------- peer online status ----------
+
+// markOK records that a paired computer just answered a request. During a
+// big transfer the link is saturated and the 3-second status check can time
+// out, so recent transfer traffic also counts as "online".
+func (d *Daemon) markOK(fp string) {
+	d.mu.Lock()
+	d.lastOK[fp] = time.Now()
+	d.reachable[fp] = true
+	d.mu.Unlock()
+}
+
+// recentlyOK reports whether fp answered in the last 15 s. Callers hold d.mu.
+func (d *Daemon) recentlyOK(fp string) bool {
+	return time.Since(d.lastOK[fp]) < 15*time.Second
+}
+
 // ---------- goodbye to paired computers ----------
 
 // hBye (peer API): a paired computer is stopping; show it offline now.
 func (d *Daemon) hBye(w http.ResponseWriter, r *http.Request, p *config.Peer) {
 	d.Disc.Forget(p.Fingerprint)
+	d.dropInboundFrom(p.Fingerprint, errors.New(p.Name+" stopped; the unfinished file was deleted"))
 	d.mu.Lock()
 	d.reachable[p.Fingerprint] = false
+	delete(d.lastOK, p.Fingerprint)
 	d.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }

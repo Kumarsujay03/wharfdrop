@@ -271,6 +271,7 @@ func (d *Daemon) hRecv(w http.ResponseWriter, r *http.Request, p *config.Peer) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	d.parts.add(tmp)
 	t := d.transfers.Start("receive", p.Name, name, size)
 	t.Dest = full
 	_, err = copyBuf(f, &countingReader{r: r.Body, t: t})
@@ -278,10 +279,11 @@ func (d *Daemon) hRecv(w http.ResponseWriter, r *http.Request, p *config.Peer) {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(tmp, full)
+		err = d.parts.keep(tmp, full)
+	} else {
+		d.parts.drop(tmp)
 	}
 	if err != nil {
-		os.Remove(tmp)
 		d.transfers.Finish(t, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -362,6 +364,7 @@ func (pc *peerClient) get(ctx context.Context, p string, q url.Values) (*http.Re
 	if err != nil {
 		return nil, err
 	}
+	pc.d.markOK(pc.fp)
 	if resp.StatusCode != 200 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		resp.Body.Close()
@@ -417,6 +420,7 @@ func (pc *peerClient) Download(ctx context.Context, share, p, destDir string) (*
 	if err != nil {
 		return nil, err
 	}
+	pc.d.parts.add(full + ".part")
 	pname, _ := pc.d.Cfg.Trusted(pc.fp)
 	t := pc.d.transfers.Start("download", pname.Name, name, resp.ContentLength)
 	t.Dest = full
@@ -425,10 +429,9 @@ func (pc *peerClient) Download(ctx context.Context, share, p, destDir string) (*
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(full+".part", full)
-	}
-	if err != nil {
-		os.Remove(full + ".part")
+		err = pc.d.parts.keep(full+".part", full)
+	} else {
+		pc.d.parts.drop(full + ".part")
 	}
 	pc.d.transfers.Finish(t, err)
 	return t, err
