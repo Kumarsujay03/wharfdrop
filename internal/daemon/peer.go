@@ -40,6 +40,7 @@ func (d *Daemon) peerMux() http.Handler {
 	m.HandleFunc("PUT /recv/chunk", d.trusted(d.hRecvChunk))
 	m.HandleFunc("POST /recv/finish", d.trusted(d.hRecvFinish))
 	m.HandleFunc("GET /avatar", d.trusted(d.hAvatar))
+	m.HandleFunc("POST /bye", d.trusted(d.hBye))
 	return m
 }
 

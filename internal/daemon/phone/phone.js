@@ -58,7 +58,7 @@ function seal(aad, plain) {
 }
 function open(aad, msg) { return xchacha20poly1305(KEY, msg.subarray(0, 24), te.encode(aad)).decrypt(msg.subarray(24)); }
 
-class LinkError extends Error { constructor(msg, gone) { super(msg); this.gone = gone; } }
+class LinkError extends Error { constructor(msg, gone, closed) { super(msg); this.gone = gone; this.closed = closed; } }
 async function rpc(op, args = {}) {
   let r;
   try {
@@ -73,6 +73,7 @@ async function rpc(op, args = {}) {
     if (r.status === 401 || r.status === 404) throw new LinkError('expired', true);
     throw new LinkError(text || r.statusText, false);
   }
+  if (data.closed) throw new LinkError(data.message || 'The phone link was closed.', true, data.closed);
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
 }
@@ -86,10 +87,29 @@ const browse = { share: null, path: '', entries: null, thumbs: {} };
 function setStatus(text, on) { $('#cstatus').textContent = text; $('#cdot').classList.toggle('on', !!on); }
 function banner(text) { const b = $('#banner'); b.textContent = text || ''; b.classList.toggle('on', !!text); }
 
-function gate(title, text) {
+function gate(title, text, retry) {
   $('#app').classList.add('hidden');
+  $('#sheet').classList.remove('on'); $('#viewer').classList.remove('on');
   const g = $('#gate'); g.classList.remove('hidden');
-  g.innerHTML = `<div class="logo"><svg class="i" style="width:30px;height:30px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6v12m0 0-3.5-3.5M8 18l3.5-3.5M16 18V6m0 0-3.5 3.5M16 6l3.5 3.5"/></svg></div><h1>${esc(title)}</h1><p>${esc(text)}</p>`;
+  g.innerHTML = `<div class="logo"><svg class="i" style="width:30px;height:30px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6v12m0 0-3.5-3.5M8 18l3.5-3.5M16 18V6m0 0-3.5 3.5M16 6l3.5 3.5"/></svg></div><h1>${esc(title)}</h1><p>${esc(text)}</p>`
+    + (retry ? '<p style="margin-top:18px"><button class="btn primary" id="gretry">Reconnect</button></p>' : '');
+  if (retry) $('#gretry').onclick = () => location.reload();
+}
+
+// ended shows why the link is over and stops all background work. A
+// remembered phone keeps its key so it can reconnect when the computer opens
+// the link again; a one-time link, or a phone disconnected on the computer,
+// forgets it.
+let over = false;
+function ended(e) {
+  over = true; online = false;
+  for (const u of uploads) if (u.state === 'sending' || u.state === 'queued') { u.state = 'cancelled'; u.cancel?.(); }
+  const keep = REMEMBER && e.closed && e.closed !== 'forgotten';
+  if (!keep) forgetLocal();
+  const title = e.closed === 'forgotten' ? 'Disconnected' : e.closed ? 'Phone link closed' : 'This phone link has ended';
+  const text = e.closed ? e.message + (keep ? ' When it is open again, tap Reconnect.' : ' To connect again, open Connect a phone in Wharfdrop and scan the new QR code.')
+    : 'On your computer, open Wharfdrop, choose Connect a phone, and scan the new QR code.';
+  gate(title, text, keep);
 }
 
 async function poll() {
@@ -99,12 +119,12 @@ async function poll() {
     setStatus('Connected · encrypted', true);
     render();
   } catch (e) {
-    if (e.gone) { forgetLocal(); gate('This phone link has ended', 'On your computer, open Wharfdrop, choose Connect a phone, and scan the new QR code.'); return; }
+    if (e.gone) { ended(e); return; }
     online = false; failures++;
     setStatus('Not connected', false);
     banner(e.message === 'offline' ? `Can't reach ${S?.computer || 'the computer'}. Check that both are on the same Wi-Fi and the phone link is open in Wharfdrop.` : e.message);
   }
-  setTimeout(poll, document.hidden ? 8000 : (uploads.some(u => u.state === 'sending') ? 1500 : 3000));
+  if (!over) setTimeout(poll, document.hidden ? 5000 : (uploads.some(u => u.state === 'sending') ? 1500 : 2000));
 }
 
 function forgetLocal() { try { localStorage.removeItem(STORE); sessionStorage.removeItem(STORE); } catch { } }
@@ -339,8 +359,20 @@ $('#fany').onchange = e => { sendFiles([...e.target.files]); e.target.value = ''
 $('#menu').onclick = openSheet;
 $('#psave').onclick = saveSheet;
 $('#sheet').onclick = e => { if (e.target.id === 'sheet') $('#sheet').classList.remove('on'); };
-$('#pdisconnect').onclick = async () => { try { await rpc('forget'); } catch { } forgetLocal(); $('#sheet').classList.remove('on'); gate('Disconnected', 'This phone is no longer connected. Scan a new QR code in Wharfdrop on your computer to connect again.'); };
+$('#pdisconnect').onclick = async () => {
+  try { await rpc('disconnect'); } catch { }
+  over = true; forgetLocal(); KEY = null;
+  gate('Disconnected', 'This phone is no longer connected, and its key was deleted. Scan a new QR code in Wharfdrop on your computer to connect again.');
+};
 $('#vclose').onclick = () => { $('#viewer').classList.remove('on'); URL.revokeObjectURL($('#vimg').src); };
+// closing the page tells the computer right away instead of after a timeout
+window.addEventListener('pagehide', () => {
+  if (over || !KEY || !SID) return;
+  try { fetch('/api/rpc?s=' + encodeURIComponent(SID), { method: 'POST', keepalive: true, body: seal('rpc|' + SID, te.encode(JSON.stringify({ op: 'bye', t: Date.now() }))) }); } catch { }
+});
+// a new QR link opened in this same tab only changes the #fragment
+window.addEventListener('hashchange', () => { if (location.hash.includes('.')) location.reload(); });
+window.addEventListener('pageshow', e => { if (e.persisted && !over) poll(); });
 window.addEventListener('beforeunload', e => { if (uploads.some(u => u.state === 'sending')) { e.preventDefault(); e.returnValue = ''; } });
 
 (async function start() {
@@ -358,7 +390,7 @@ window.addEventListener('beforeunload', e => { if (uploads.some(u => u.state ===
     if (S.avatar) rpc('get', { kind: 'avatar' }).then(g => download(g.token, () => { })).then(b => { const img = $('#cav'); img.src = URL.createObjectURL(new Blob([b], { type: 'image/jpeg' })); img.style.display = 'block'; }).catch(() => { });
     render();
   } catch (e) {
-    if (e.gone) { forgetLocal(); gate('This phone link has ended', 'On your computer, open Wharfdrop, choose Connect a phone, and scan the new QR code.'); return; }
+    if (e.gone) { ended(e); return; }
     banner(e.message === 'offline' ? 'Can\'t reach the computer. Check that both are on the same Wi-Fi and the phone link is open in Wharfdrop.' : e.message);
   }
   poll();

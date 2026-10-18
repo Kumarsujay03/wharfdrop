@@ -69,6 +69,7 @@ func (d *Daemon) localMux() http.Handler {
 	api.HandleFunc("POST /api/update/check", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.CheckUpdate(r.Context())) })
 	api.HandleFunc("POST /api/update/install", d.lUpdateInstall)
 	api.HandleFunc("POST /api/shutdown", d.lShutdown)
+	api.HandleFunc("POST /api/ui-closed", d.lUIClosed)
 	api.HandleFunc("POST /api/open-folder", d.lOpenFolder)
 	m.Handle("/api/", d.auth(api))
 	return m
@@ -123,14 +124,15 @@ type State struct {
 		Version string   `json:"version"`
 		Avatar  int64    `json:"avatar"` // avatar version (0 = none)
 	} `json:"self"`
-	Incoming   string          `json:"incoming"`
-	Peers      []peerView      `json:"peers"`
-	Shares     []*config.Share `json:"shares"`
-	PendingIn  []PairRequest   `json:"pending_in"`
-	PendingOut []PairRequest   `json:"pending_out"`
-	Transfers  []Transfer      `json:"transfers"`
-	Update     UpdateState     `json:"update"`
-	Phone      PhoneState      `json:"phone"`
+	Incoming    string          `json:"incoming"`
+	StopOnClose bool            `json:"stop_on_close"`
+	Peers       []peerView      `json:"peers"`
+	Shares      []*config.Share `json:"shares"`
+	PendingIn   []PairRequest   `json:"pending_in"`
+	PendingOut  []PairRequest   `json:"pending_out"`
+	Transfers   []Transfer      `json:"transfers"`
+	Update      UpdateState     `json:"update"`
+	Phone       PhoneState      `json:"phone"`
 }
 
 func (d *Daemon) state() State {
@@ -182,11 +184,15 @@ func (d *Daemon) state() State {
 	d.mu.Unlock()
 	s.Transfers = d.transfers.List()
 	s.Update = d.updateState()
+	s.StopOnClose = d.stopOnClose()
 	s.Phone = d.phones.State()
 	return s
 }
 
-func (d *Daemon) lState(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.state()) }
+func (d *Daemon) lState(w http.ResponseWriter, r *http.Request) {
+	d.ui.poll(r.URL.Query().Get("tab"))
+	writeJSON(w, d.state())
+}
 
 func (d *Daemon) lPair(w http.ResponseWriter, r *http.Request) {
 	var in struct{ FP, Addr string }
@@ -305,6 +311,7 @@ func (d *Daemon) lSettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name, Incoming string
 		AutoUpdate     string `json:"auto_update"`
+		StopOnClose    *bool  `json:"stop_on_close"`
 	}
 	decode(r, &in)
 	switch in.AutoUpdate {
@@ -328,6 +335,9 @@ func (d *Daemon) lSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.AutoUpdate != "" {
 			c.AutoUpdate = in.AutoUpdate
+		}
+		if in.StopOnClose != nil {
+			c.StopOnClose = in.StopOnClose
 		}
 	})
 	writeJSON(w, map[string]bool{"ok": true})
@@ -536,10 +546,7 @@ func (d *Daemon) lShutdown(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]bool{"ok": true})
 	go func() {
 		time.Sleep(200 * time.Millisecond) // let the reply go out
-		select {
-		case d.shutdown <- struct{}{}:
-		default:
-		}
+		d.requestStop("requested from the web UI or `wharfdrop stop`")
 	}()
 }
 

@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-10-18
+
+### Fixed
+- Disconnecting a phone on the computer left the phone page showing "Connected", and
+  disconnecting on the phone left it listed on the computer. Both sides now update within
+  about two seconds:
+  - **Disconnect** on the phone revokes its key on the computer and removes it at once.
+  - Removing a phone, closing the phone link or stopping Wharfdrop sends the phone an
+    authenticated, encrypted notice with the reason ("Disconnected", "Phone link closed",
+    "updating"). The notice uses the phone's own key, so nobody else can fake or read it.
+  - Closing the phone's browser tab marks it offline straight away. Reloading still works.
+- Stopping Wharfdrop is now a clean, complete shutdown. It waits briefly for connected phones
+  to get the notice, tells paired computers it is going offline, closes every port, and
+  only then exits. The web UI shows "Wharfdrop is stopped" after the process has really
+  exited, and `wharfdrop stop` waits for it too.
+
+### Added
+- Closing the Wharfdrop window stops Wharfdrop after about 10 seconds. Reloading doesn't count,
+  other open Wharfdrop windows keep it running, and transfers finish first. You can change this
+  in Settings → When this window is closed. `wharfdrop start` and the CLI are not affected.
+- If Wharfdrop stops while its window is open, the window says so and reconnects
+  by itself when Wharfdrop runs again.
+
 ## [0.5.2] - 2026-10-18
 
 ### Fixed
@@ -148,6 +171,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.6.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.6.0
 [0.5.2]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.0

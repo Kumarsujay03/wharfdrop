@@ -61,6 +61,7 @@ type Daemon struct {
 	shutdown   chan struct{}
 	peerSrv    *http.Server
 	localSrv   *http.Server
+	ui         uiTracker
 }
 
 func New(dir string) (*Daemon, error) {
@@ -152,16 +153,25 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.expireInbound(ctx)
 	go d.phones.idleLoop(ctx)
 
+	go d.uiWatch(ctx)
+
 	var result error
+	var cname string
+	d.Cfg.View(func(c *config.Config) { cname = c.Name })
 	select {
 	case <-ctx.Done():
+		d.phones.StopWith("stopped", "Wharfdrop on "+cname+" was stopped.")
 	case <-d.shutdown:
-		log.Printf("stopping (requested from the web UI or `wharfdrop stop`)")
+		log.Printf("stopping (%s)", d.stopReason())
+		d.phones.StopWith("stopped", "Wharfdrop on "+cname+" was stopped.")
 	case <-d.restart:
 		log.Printf("restarting into the updated version")
+		d.phones.StopWith("updating", "Wharfdrop on "+cname+" is updating. Open the phone link again in a moment.")
 		result = ErrRestart
 	}
-	d.phones.Stop("Wharfdrop stopped")
+	if result == nil {
+		d.sayGoodbye() // paired computers mark us offline right away
+	}
 	shut, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	d.peerSrv.Shutdown(shut)

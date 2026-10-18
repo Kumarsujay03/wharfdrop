@@ -269,7 +269,8 @@ func stop(dir string, force bool) {
 		path += "?force=1"
 	}
 	c.post(path, nil, nil)
-	for i := 0; i < 50; i++ {
+	fmt.Println("Stopping: disconnecting phones and telling paired devices…")
+	for i := 0; i < 150; i++ {
 		time.Sleep(100 * time.Millisecond)
 		if _, ok := tryCLI(dir); !ok {
 			fmt.Println("Wharfdrop stopped.")

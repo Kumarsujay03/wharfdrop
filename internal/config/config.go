@@ -40,6 +40,7 @@ type Config struct {
 	IncomingDir string           `json:"incoming_dir"`
 	AutoUpdate  string           `json:"auto_update"` // auto | notify | off
 	PhonePort   int              `json:"phone_port,omitempty"`
+	StopOnClose *bool            `json:"stop_on_close,omitempty"`
 	Phones      []*Phone         `json:"phones,omitempty"`
 	Peers       map[string]*Peer `json:"peers"`
 	Shares      []*Share         `json:"shares"`

@@ -160,8 +160,12 @@ wharfdrop start        # ...or just start it in the background
 wharfdrop stop         # stop everything when you are done
 ```
 
-You can also click **Stop** in the web UI header. `wharfdrop stop` refuses while a transfer is
-running; add `--force` to stop anyway. To run in a terminal window instead, use
+You can also click **Stop** in the web UI header, or just close the Wharfdrop window: when
+its last window closes, Wharfdrop stops about 10 seconds later (reloading the page does not
+count, and running transfers finish first). Turn this off in **Settings → When this window is
+closed**. Stopping is clean: connected phones are told and show "Phone link closed", paired
+computers see this one go offline at once, and every port is closed before the program exits.
+`wharfdrop stop` refuses while a transfer is running; add `--force` to stop anyway. To run in a terminal window instead, use
 `wharfdrop serve` and press Ctrl+C to stop. The background node logs to `wharfdrop.log` in
 the config folder.
 
@@ -206,7 +210,13 @@ Phones connect through their web browser, so there is nothing to install on the 
 
 Tick **Remember this phone** in the phone's menu to reconnect later without scanning, while the
 phone link is open. The phone link closes after 10 minutes without activity, when you click
-the close button, or when Wharfdrop stops.
+the close button, or when Wharfdrop stops; the phone page then says why within about two
+seconds.
+
+**Disconnecting** works from either side. **Disconnect** in the phone's menu deletes the key
+on the phone and revokes it on the computer, so the phone disappears from the computer at once.
+Removing a phone on the computer shows "Disconnected" on the phone. Closing the phone's browser
+tab shows it as offline straight away.
 
 From the terminal:
 
