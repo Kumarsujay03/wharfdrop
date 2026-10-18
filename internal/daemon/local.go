@@ -11,8 +11,10 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -53,6 +55,7 @@ func (d *Daemon) localMux() http.Handler {
 	api.HandleFunc("POST /api/update/check", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, d.CheckUpdate(r.Context())) })
 	api.HandleFunc("POST /api/update/install", d.lUpdateInstall)
 	api.HandleFunc("POST /api/shutdown", d.lShutdown)
+	api.HandleFunc("POST /api/open-folder", d.lOpenFolder)
 	m.Handle("/api/", d.auth(api))
 	return m
 }
@@ -496,4 +499,30 @@ func (d *Daemon) lShutdown(w http.ResponseWriter, r *http.Request) {
 		default:
 		}
 	}()
+}
+
+// lOpenFolder opens the received-files folder in the system file manager.
+// Only this fixed folder can be opened; the request cannot name a path.
+func (d *Daemon) lOpenFolder(w http.ResponseWriter, r *http.Request) {
+	var dir string
+	d.Cfg.View(func(c *config.Config) { dir = c.IncomingDir })
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fail(w, err, 500)
+		return
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", dir)
+	case "darwin":
+		cmd = exec.Command("open", dir)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+	if err := cmd.Start(); err != nil {
+		fail(w, fmt.Errorf("could not open %s: %w", dir, err), 500)
+		return
+	}
+	go cmd.Wait()
+	writeJSON(w, map[string]bool{"ok": true})
 }
