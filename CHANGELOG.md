@@ -9,7 +9,8 @@ project uses [Semantic Versioning](https://semver.org/).
 ### Changed
 - Redesigned web interface: a sidebar of devices, and a page per device with **Files**
   (browse what it shares) and **Send** tabs. Transfers, Shared folders and Settings have
-  their own pages. Pairing and confirmations use proper dialogs. Light and dark themes, and
+  their own pages. Pairing and confirmations use proper dialogs. A new teal and cyan colour
+  palette on neutral greys replaces the old blue. Light and dark themes, and
   a layout that works on phones.
 - Long file names no longer push the page wider than the window.
 - Files can be dropped anywhere on the window to send them to the selected device.
