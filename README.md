@@ -274,6 +274,9 @@ Ubuntu with ufw:
 sudo ufw allow 47070/udp && sudo ufw allow 48080/tcp && sudo ufw allow 48082/tcp
 ```
 
+If a phone stays on a blank, loading page, the firewall is blocking port 48082. The QR dialog
+shows the exact command for your system.
+
 Windows: accept the Defender Firewall prompt on first run for *private* networks, or
 run `wharfdrop start` once and allow it when Windows asks.
 

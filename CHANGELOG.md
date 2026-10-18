@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-10-18
+
+### Fixed
+- "Can't scan? Type this address on the phone" in the QR dialog did not open: clicks inside
+  dialogs were treated as clicks on the backdrop.
+
+### Added
+- The QR dialog and `wharfdrop phone` detect an active firewall (ufw or firewalld on Linux,
+  Windows Defender Firewall) and show the exact command to allow phones, with a Copy button.
+  A blocked phone otherwise just shows a blank, loading page.
+- The phone page shows "Connecting to Wharfdrop…" straight away instead of a blank screen.
+
 ## [0.5.0] - 2026-10-18
 
 ### Added
@@ -123,6 +135,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.5.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.3.0
