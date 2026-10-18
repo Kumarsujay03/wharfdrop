@@ -86,9 +86,12 @@ jobs:
           $env:WHARFDROP_DIR = "$dir\cfg"
           & "$dir\bin\wharfdrop.exe" start; if ($LASTEXITCODE) { throw "start failed" }
           & "$dir\bin\wharfdrop.exe" uninstall --yes; if ($LASTEXITCODE) { throw "uninstall failed" }
-          Start-Sleep 6
+          for ($i = 0; $i -lt 30 -and (Test-Path "$dir\bin\wharfdrop.exe"); $i++) { Start-Sleep 1 }
           if (Test-Path "$dir\cfg") { throw "settings folder still exists" }
-          if (Test-Path "$dir\bin\wharfdrop.exe") { throw "program file still exists" }
+          if (Test-Path "$dir\bin\wharfdrop.exe") {
+            Get-Process | Where-Object { $_.ProcessName -match 'wharfdrop|powershell' } | Format-Table Id, ProcessName, Path -AutoSize | Out-String | Write-Host
+            throw "program file still exists"
+          }
           if ((Get-Content "$dir\received\movie.txt") -ne 'keep me') { throw "received file was touched" }
           if (Get-Process wharfdrop -ErrorAction SilentlyContinue) { throw "still running" }
           Write-Host "uninstall test passed"

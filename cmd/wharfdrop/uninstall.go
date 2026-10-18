@@ -120,7 +120,14 @@ func windowsCleanup(exe string) {
 		return
 	}
 	folder := filepath.Dir(exe)
-	ps := fmt.Sprintf(`$d=%q; $p=[Environment]::GetEnvironmentVariable('Path','User'); if($p){ [Environment]::SetEnvironmentVariable('Path', (($p -split ';') | Where-Object { $_ -and ($_.TrimEnd('\') -ne $d.TrimEnd('\')) }) -join ';', 'User') }; Start-Sleep -Seconds 2; Remove-Item -Force -LiteralPath %q -ErrorAction SilentlyContinue; Remove-Item -Force -LiteralPath (%q + '.old') -ErrorAction SilentlyContinue; if(-not (Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)){ Remove-Item -Force -LiteralPath $d -ErrorAction SilentlyContinue }`, folder, exe, exe)
+	q := func(v string) string { return "'" + strings.ReplaceAll(v, "'", "''") + "'" } // PowerShell literal string
+	ps := "$d=" + q(folder) + "; $e=" + q(exe) + "; " +
+		"$p=[Environment]::GetEnvironmentVariable('Path','User'); " +
+		"if($p){ [Environment]::SetEnvironmentVariable('Path', (($p -split ';') | Where-Object { $_ -and ($_.TrimEnd('\\') -ne $d.TrimEnd('\\')) }) -join ';', 'User') }; " +
+		// wait for wharfdrop.exe to exit, then delete it (retry for up to ~20 s)
+		"for($i=0; $i -lt 40; $i++){ Start-Sleep -Milliseconds 500; Remove-Item -Force -LiteralPath $e -ErrorAction SilentlyContinue; if(-not (Test-Path -LiteralPath $e)){ break } }; " +
+		"Remove-Item -Force -LiteralPath ($e + '.old') -ErrorAction SilentlyContinue; " +
+		"if(-not (Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)){ Remove-Item -Force -LiteralPath $d -ErrorAction SilentlyContinue }"
 	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", ps)
 	detach(cmd)
 	cmd.Start()
