@@ -35,11 +35,12 @@ type PairRequest struct {
 	PeerName string    `json:"peer_name"`
 	PeerAddr string    `json:"peer_addr"`
 	Code     string    `json:"code"`
-	Status   string    `json:"status"` // pending | accepted | denied | cancelled
+	Status   string    `json:"status"` // committed | pending | accepted | denied | cancelled
 	Local    bool      `json:"local_confirmed"`
 	Remote   bool      `json:"remote_confirmed"`
 	Created  time.Time `json:"created"`
 	cancel   context.CancelFunc
+	nonce    []byte // incoming only: our committed nonce, revealed at /pair/nonce
 }
 
 type Daemon struct {

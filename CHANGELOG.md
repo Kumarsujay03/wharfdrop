@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+- Pairing codes could be forged by an active attacker on the same network. The 6-digit code
+  was a hash of the two device fingerprints only, and fingerprints are announced on the LAN,
+  so a man-in-the-middle could generate keys until both screens showed the same code (about
+  a million tries, a few seconds). Pairing now uses protocol `wharfdrop-sas-v2`: the device
+  being paired with commits to a random nonce first, the initiator sends its own nonce, then
+  the first nonce is revealed, and the code covers both fingerprints and both nonces. Neither
+  side can change anything after seeing the other's nonce, so each forging attempt succeeds
+  only one time in a million and shows a pairing prompt.
+
+### Changed
+- **Breaking for pairing only:** devices on older versions can no longer pair with this one.
+  An old device asking to pair is refused with "needs a newer Wharfdrop" (older versions show
+  this as "bad pairing reply"), and pairing with an old device stops with a message to update
+  it. Devices that are already paired keep working without pairing again.
+
 ## [0.6.1] - 2026-10-18
 
 ### Fixed

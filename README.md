@@ -298,11 +298,18 @@ devices remember each other's last address.
 
 * Each device generates an Ed25519 key and a self-signed certificate on first run. Its
   SHA-256 fingerprint is the device identity.
-* Pairing runs over TLS with both sides presenting their certificate. Each side derives
-  the code from the two fingerprints *it actually saw in the handshake*. A man-in-the-middle
-  would present a different certificate to each side, so the two screens would show
-  different codes and the user would refuse. The initiating side additionally aborts if the
-  code it computes differs from the one the other side reports.
+* Pairing runs over TLS with both sides presenting their certificate. The 6-digit code is
+  derived from the two fingerprints *each side actually saw in the handshake* plus a random
+  nonce from each side, exchanged commit-then-reveal like Bluetooth's numeric comparison:
+  the device being paired with first sends a hash committing to its key and nonce, the
+  initiator then sends its nonce, and only then is the first nonce revealed and checked.
+  Neither side can change its key or nonce after seeing the other's, so a man-in-the-middle
+  cannot grind keys until the two codes agree: each attempt gives it a code it cannot choose
+  (a 1-in-a-million match) and pops up a pairing prompt. The initiating side also aborts if
+  the commitment or the code the other side reports does not match.
+* Wharfdrop 0.6.x and earlier used a code without the nonces, which an attacker on the LAN
+  could forge in seconds. Pairing with them is refused with a message to update; devices
+  that are already paired keep working, since pairing is not repeated.
 * After pairing, every connection is TLS 1.3 with the peer's fingerprint pinned on both ends.
   There is no CA and no trust-on-first-use.
 * Shares are read-only and jailed to their folder (paths are normalised and checked against

@@ -1,9 +1,11 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +33,7 @@ func (d *Daemon) peerMux() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /info", d.hInfo)
 	m.HandleFunc("POST /pair/request", d.hPairRequest)
+	m.HandleFunc("POST /pair/nonce", d.hPairNonce)
 	m.HandleFunc("GET /pair/status", d.hPairStatus)
 	m.HandleFunc("GET /shares", d.trusted(d.hShares))
 	m.HandleFunc("GET /ls", d.trusted(d.hLs))
@@ -102,8 +105,14 @@ func (d *Daemon) hInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"name": d.Cfg.Name, "fp": d.ID.Fingerprint, "version": Version})
 }
 
-// hPairRequest: a remote device asks to pair. We compute the SAS from the
-// client certificate it presented and queue it for the local user.
+// oldPairingMsg is sent to devices that still pair with the v1 code, which
+// had no commitment and could be forged by a man-in-the-middle.
+const oldPairingMsg = "this device needs a newer Wharfdrop to pair (pairing protocol " +
+	identity.SASVersion + "); update Wharfdrop on both devices"
+
+// hPairRequest: a remote device asks to pair (step 1 of identity.SAS). We
+// commit to a fresh nonce; the request stays hidden from the local user until
+// the initiator sends its own nonce to /pair/nonce.
 func (d *Daemon) hPairRequest(w http.ResponseWriter, r *http.Request) {
 	fp := callerFP(r)
 	if fp == "" {
@@ -114,15 +123,24 @@ func (d *Daemon) hPairRequest(w http.ResponseWriter, r *http.Request) {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 		Port int    `json:"port"`
+		SAS  string `json:"sas"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil || body.ID == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if body.SAS != identity.SASVersion {
+		http.Error(w, oldPairingMsg, http.StatusUpgradeRequired)
+		return
+	}
+	nonce, err := identity.NewNonce()
+	if err != nil {
+		http.Error(w, "no randomness", http.StatusInternalServerError)
+		return
+	}
 	host, _, _ := splitHost(r.RemoteAddr)
 	req := &PairRequest{ID: body.ID, PeerFP: fp, PeerName: body.Name,
-		PeerAddr: joinHost(host, body.Port), Code: identity.SAS(fp, d.ID.Fingerprint),
-		Status: "pending", Created: time.Now()}
+		PeerAddr: joinHost(host, body.Port), Status: "committed", Created: time.Now(), nonce: nonce}
 	d.mu.Lock()
 	// limit unauthenticated requests so a noisy LAN device cannot flood the UI
 	if len(d.pendingIn) >= maxPendingIn {
@@ -138,13 +156,46 @@ func (d *Daemon) hPairRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	d.pendingIn[req.ID] = req
 	d.mu.Unlock()
+	writeJSON(w, map[string]any{"name": d.Cfg.Name, "sas": identity.SASVersion,
+		"commit": identity.Commit(d.ID.Fingerprint, fp, nonce)})
+}
+
+// hPairNonce: the initiator sends its nonce (step 2); we reveal ours (step 3),
+// derive the code and show the request to the local user. It works once per
+// request, so the initiator cannot try another nonce after seeing ours.
+func (d *Daemon) hPairNonce(w http.ResponseWriter, r *http.Request) {
+	fp := callerFP(r)
+	var body struct {
+		ID    string `json:"id"`
+		Nonce string `json:"nonce"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	theirs, err := hex.DecodeString(body.Nonce)
+	if err != nil || len(theirs) != identity.NonceSize {
+		http.Error(w, "bad nonce", http.StatusBadRequest)
+		return
+	}
+	d.mu.Lock()
+	p, ok := d.pendingIn[body.ID]
+	if !ok || fp == "" || p.PeerFP != fp || p.Status != "committed" {
+		d.mu.Unlock()
+		http.Error(w, "no such pairing request", http.StatusNotFound)
+		return
+	}
+	p.Code = identity.SAS(fp, d.ID.Fingerprint, theirs, p.nonce)
+	p.Status = "pending"
+	ours, code := p.nonce, p.Code
+	d.mu.Unlock()
 	if _, already := d.Cfg.Trusted(fp); already {
 		// re-pair: accept silently; keys unchanged
 		d.mu.Lock()
-		req.Status = "accepted"
+		p.Status = "accepted"
 		d.mu.Unlock()
 	}
-	writeJSON(w, map[string]any{"code": req.Code, "name": d.Cfg.Name})
+	writeJSON(w, map[string]any{"nonce": hex.EncodeToString(ours), "code": code})
 }
 
 func (d *Daemon) hPairStatus(w http.ResponseWriter, r *http.Request) {
@@ -489,26 +540,46 @@ func (d *Daemon) StartPairing(addr string) (*PairRequest, error) {
 	var seen *x509.Certificate
 	c := d.client("", func(cert *x509.Certificate) { seen = cert })
 	id := newID()
-	body, _ := json.Marshal(map[string]any{"id": id, "name": d.Cfg.Name, "port": d.Cfg.PeerPort})
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	req, _ := http.NewRequestWithContext(ctx, "POST", d.peerURL(addr, "/pair/request", nil), strings.NewReader(string(body)))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.Do(req)
-	cancel()
-	if err != nil {
-		return nil, fmt.Errorf("could not reach %s: %w", addr, err)
-	}
-	defer resp.Body.Close()
 	var reply struct {
-		Code string `json:"code"`
-		Name string `json:"name"`
+		Name   string `json:"name"`
+		SAS    string `json:"sas"`
+		Commit string `json:"commit"`
+		Code   string `json:"code"` // only sent by v1 devices
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil || seen == nil {
+	if err := d.pairPost(c, addr, "/pair/request", map[string]any{"id": id, "name": d.Cfg.Name,
+		"port": d.Cfg.PeerPort, "sas": identity.SASVersion}, &reply); err != nil {
+		return nil, err
+	}
+	if seen == nil {
+		return nil, errors.New("bad pairing reply")
+	}
+	if reply.SAS != identity.SASVersion {
+		if reply.Code != "" {
+			return nil, fmt.Errorf("%s runs an older Wharfdrop that uses the old, forgeable pairing code; update it, then pair again", reply.Name)
+		}
 		return nil, errors.New("bad pairing reply")
 	}
 	fp := identity.FingerprintOf(seen)
-	code := identity.SAS(fp, d.ID.Fingerprint)
-	if code != reply.Code {
+	mine, err := identity.NewNonce()
+	if err != nil {
+		return nil, err
+	}
+	// The rest goes to the same certificate only, so the commitment and the
+	// reveal come from the device whose fingerprint goes into the code.
+	var reveal struct {
+		Nonce string `json:"nonce"`
+		Code  string `json:"code"`
+	}
+	if err := d.pairPost(d.client(fp, nil), addr, "/pair/nonce",
+		map[string]any{"id": id, "nonce": hex.EncodeToString(mine)}, &reveal); err != nil {
+		return nil, err
+	}
+	theirs, err := hex.DecodeString(reveal.Nonce)
+	if err != nil || !identity.VerifyCommit(reply.Commit, fp, d.ID.Fingerprint, theirs) {
+		return nil, errors.New("pairing commitment mismatch: possible interception, aborting")
+	}
+	code := identity.SAS(d.ID.Fingerprint, fp, mine, theirs)
+	if code != reveal.Code {
 		return nil, errors.New("pairing code mismatch: possible interception, aborting")
 	}
 	pctx, pcancel := context.WithCancel(context.Background())
@@ -527,6 +598,28 @@ func (d *Daemon) StartPairing(addr string) (*PairRequest, error) {
 	d.mu.Unlock()
 	go d.pollPairing(pctx, pr, addr)
 	return pr, nil
+}
+
+// pairPost sends one pairing step and decodes the JSON reply.
+func (d *Daemon) pairPost(c *http.Client, addr, p string, body, out any) error {
+	b, _ := json.Marshal(body)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "POST", d.peerURL(addr, p, nil), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.Do(req)
+	if err != nil {
+		return fmt.Errorf("could not reach %s: %w", addr, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("pairing refused: %s", strings.TrimSpace(string(msg)))
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return errors.New("bad pairing reply")
+	}
+	return nil
 }
 
 func (d *Daemon) pollPairing(ctx context.Context, pr *PairRequest, addr string) {
@@ -604,7 +697,7 @@ func (d *Daemon) CancelOutgoing(id string) {
 func (d *Daemon) RespondIncoming(id string, allow bool) error {
 	d.mu.Lock()
 	pr, ok := d.pendingIn[id]
-	if !ok {
+	if !ok || pr.Code == "" {
 		d.mu.Unlock()
 		return errors.New("no such pairing request")
 	}

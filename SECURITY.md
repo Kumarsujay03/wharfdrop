@@ -27,7 +27,11 @@ Wharfdrop is designed for devices you own on a network you mostly trust, such as
 - Another device on the same network reading or modifying transfers (prevented by TLS 1.3
   with pinned certificates).
 - An active man-in-the-middle during pairing (detected by the 6-digit code differing on
-  the two screens, provided users compare it).
+  the two screens, provided users compare it). The code mixes both fingerprints with a
+  random nonce from each side, exchanged commit-then-reveal (protocol `wharfdrop-sas-v2`),
+  so an attacker who knows both fingerprints cannot grind keys to make the codes match:
+  each attempt succeeds one time in a million and shows a pairing prompt. Repeated
+  pairing prompts you did not start are a sign of an attack; deny them.
 - A paired device reading outside a folder that was shared with it (paths are confined to
   the share root).
 - Other local processes or web pages driving the daemon (the loopback API needs a random
