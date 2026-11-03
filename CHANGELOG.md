@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0] - 2026-11-03
 
 ### Security
 - Pairing codes could be forged by an active attacker on the same network. The 6-digit code
@@ -18,7 +18,7 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **Breaking for pairing only:** devices on older versions can no longer pair with this one.
-  An old device asking to pair is refused with "needs a newer Wharfdrop" (older versions show
+  An old device asking to pair is refused with "needs a newer Wharfdrop" (0.6.x shows
   this as "bad pairing reply"), and pairing with an old device stops with a message to update
   it. Devices that are already paired keep working without pairing again.
 
@@ -213,6 +213,7 @@ project uses [Semantic Versioning](https://semver.org/).
 - Web UI (drag and drop) on 127.0.0.1 and a full command-line interface.
 - Release binaries for Linux, Windows and macOS on amd64 and arm64.
 
+[0.7.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.7.0
 [0.6.1]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.6.0
 [0.5.2]: https://github.com/Kumarsujay03/wharfdrop/releases/tag/v0.5.2
